@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { ArrowRight, CheckCircle, UserPlus } from "lucide-react";
-import { registerAccount } from "../lib/accountStorage";
+import { useCustomerAuth } from "../contexts/CustomerAuthContext";
 
 export default function Register() {
+  const { register } = useCustomerAuth();
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
@@ -14,11 +16,13 @@ export default function Register() {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setVerificationToken("");
     setSubmitting(true);
     try {
-      registerAccount(form);
-      setSuccess("Ihr Konto wurde erfolgreich erstellt. Sie werden weitergeleitet...");
-      window.setTimeout(() => navigate("/account", { replace: true }), 1200);
+      const user = register(form);
+      setVerificationToken(user.verificationToken || "");
+      setSuccess("Ihr Konto wurde erfolgreich erstellt. Bitte verifizieren Sie Ihre E-Mail, um alle Funktionen zu nutzen.");
+      setTimeout(() => navigate("/account/dashboard", { replace: true }), 1400);
     } catch (err) {
       setError(err.message || "Registrierung fehlgeschlagen.");
     } finally {
@@ -71,6 +75,15 @@ export default function Register() {
 
           {error && <div className="rounded-3xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
           {success && <div className="rounded-3xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">{success}</div>}
+          {verificationToken && (
+            <div className="rounded-3xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-800">
+              <p className="font-semibold">Verifizierung</p>
+              <p className="mt-2">Nutzen Sie den folgenden Link, um Ihre E-Mail zu bestätigen:</p>
+              <Link to={`/account/verify-email?token=${verificationToken}`} className="text-[#E63946] font-semibold hover:underline">
+                Jetzt E-Mail verifizieren
+              </Link>
+            </div>
+          )}
 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <button

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
 
 import { ModalProvider } from "./contexts/ModalContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { CustomerAuthProvider } from "./contexts/CustomerAuthContext";
 
 import Header from "./components/Header";
 import Hero from "./components/Hero";
@@ -25,7 +26,10 @@ import QuoteWizard from "./components/QuoteWizard";
 import ContactModal from "./components/ContactModal";
 
 import AdminLogin from "./pages/admin/AdminLogin";
-import MembershipPanel from "./pages/MembershipPanel";
+import AccountLogin from "./pages/AccountLogin";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import Register from "./pages/Register";
 import AdminLayout from "./pages/admin/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
@@ -45,6 +49,13 @@ import Offers from "./pages/admin/Offers";
 import InvoiceEditor from "./pages/admin/InvoiceEditor";
 import InvoiceTemplates from "./pages/admin/InvoiceTemplates";
 import HostingPackagesAdmin from "./pages/admin/HostingPackagesAdmin";
+import AccountLayout from "./pages/account/AccountLayout";
+import AccountDashboard from "./pages/account/AccountDashboard";
+import HostingShop from "./pages/account/HostingShop";
+import AccountInvoices from "./pages/account/AccountInvoices";
+import SupportTickets from "./pages/account/SupportTickets";
+import Profile from "./pages/account/Profile";
+import Checkout from "./pages/account/Checkout";
 
 function PublicSite() {
   const [scrolled, setScrolled] = useState(false);
@@ -91,37 +102,54 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <AuthProvider>
-          <ModalProvider>
-            <Routes>
-              <Route path="/" element={<PublicSite />} />
+          <CustomerAuthProvider>
+            <ModalProvider>
+              <Routes>
+                <Route path="/" element={<PublicSite />} />
 
-              <Route path="/admin/login" element={<AdminLogin />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/account" element={<MembershipPanel />} />
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<Dashboard />} />
-                <Route path="site" element={<SiteSettings />} />
-                <Route path="quotes" element={<Quotes />} />
-                <Route path="contacts" element={<Contacts />} />
-                <Route path="projects" element={<ProjectsAdmin />} />
-                <Route path="blogs" element={<BlogsAdmin />} />
-                <Route path="testimonials" element={<TestimonialsAdmin />} />
-                <Route path="services" element={<ServicesAdmin />} />
-                <Route path="faqs" element={<FAQAdmin />} />
-                <Route path="templates" element={<EmailTemplates />} />
-                <Route path="companies" element={<Companies />} />
-                <Route path="products" element={<Products />} />
-                <Route path="hosting" element={<HostingPackagesAdmin />} />
-                <Route path="invoices" element={<Invoices />} />
-                <Route path="invoices/new" element={<InvoiceEditor mode="invoice" />} />
-                <Route path="invoices/:id" element={<InvoiceEditor mode="invoice" />} />
-                <Route path="invoice-templates" element={<InvoiceTemplates />} />
-                <Route path="offers" element={<Offers />} />
-                <Route path="offers/new" element={<InvoiceEditor mode="offer" />} />
-                <Route path="offers/:id" element={<InvoiceEditor mode="offer" />} />
-              </Route>
-            </Routes>
-          </ModalProvider>
+                <Route path="/admin/login" element={<AdminLogin />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/account">
+                  <Route index element={<Navigate to="/account/login" replace />} />
+                  <Route path="login" element={<AccountLogin />} />
+                  <Route path="forgot-password" element={<ForgotPassword />} />
+                  <Route path="verify-email" element={<VerifyEmail />} />
+                  <Route path="reset-password/:token" element={<ResetPassword />} />
+                  <Route path="register" element={<Register />} />
+                  <Route element={<AccountLayout />}>
+                    <Route path="dashboard" element={<AccountDashboard />} />
+                    <Route path="hosting" element={<HostingShop />} />
+                    <Route path="invoices" element={<AccountInvoices />} />
+                    <Route path="tickets" element={<SupportTickets />} />
+                    <Route path="profile" element={<Profile />} />
+                    <Route path="checkout" element={<Checkout />} />
+                  </Route>
+                </Route>
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="site" element={<SiteSettings />} />
+                  <Route path="quotes" element={<Quotes />} />
+                  <Route path="contacts" element={<Contacts />} />
+                  <Route path="projects" element={<ProjectsAdmin />} />
+                  <Route path="blogs" element={<BlogsAdmin />} />
+                  <Route path="testimonials" element={<TestimonialsAdmin />} />
+                  <Route path="services" element={<ServicesAdmin />} />
+                  <Route path="faqs" element={<FAQAdmin />} />
+                  <Route path="templates" element={<EmailTemplates />} />
+                  <Route path="companies" element={<Companies />} />
+                  <Route path="products" element={<Products />} />
+                  <Route path="hosting" element={<HostingPackagesAdmin />} />
+                  <Route path="invoices" element={<Invoices />} />
+                  <Route path="invoices/new" element={<InvoiceEditor mode="invoice" />} />
+                  <Route path="invoices/:id" element={<InvoiceEditor mode="invoice" />} />
+                  <Route path="invoice-templates" element={<InvoiceTemplates />} />
+                  <Route path="offers" element={<Offers />} />
+                  <Route path="offers/new" element={<InvoiceEditor mode="offer" />} />
+                  <Route path="offers/:id" element={<InvoiceEditor mode="offer" />} />
+                </Route>
+              </Routes>
+            </ModalProvider>
+          </CustomerAuthProvider>
         </AuthProvider>
       </BrowserRouter>
     </div>
