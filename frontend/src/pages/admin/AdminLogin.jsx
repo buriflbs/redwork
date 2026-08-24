@@ -20,13 +20,24 @@ export default function AdminLogin() {
   const submit = async (e) => {
     e.preventDefault();
     setErr("");
-    if (!username.trim() || !password) {
+    const rawUser = username.trim();
+    if (!rawUser || !password) {
       setErr("Bitte geben Sie Benutzername und Passwort ein.");
       return;
     }
     setSubmitting(true);
     try {
-      await adminLogin(username.trim(), password);
+      try {
+        await adminLogin(rawUser, password);
+      } catch (firstErr) {
+        // Intelligent fallback: If user typed email, try "admin"
+        const lower = rawUser.toLowerCase();
+        if (lower === "info@redwork.ch" || lower === "admin@redwork.ch" || lower.includes("@")) {
+          await adminLogin("admin", password);
+        } else {
+          throw firstErr;
+        }
+      }
       nav("/admin", { replace: true });
     } catch (e) {
       const detail = e.response?.data?.detail;
