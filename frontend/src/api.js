@@ -1,6 +1,24 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || window.location.origin;
+const getBackendUrl = () => {
+  if (typeof window !== "undefined" && window.location) {
+    const hostname = window.location.hostname;
+    const isLocalhost =
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.endsWith(".local");
+
+    // Only use REACT_APP_BACKEND_URL if actually developing on localhost
+    if (isLocalhost && process.env.REACT_APP_BACKEND_URL) {
+      return process.env.REACT_APP_BACKEND_URL;
+    }
+    // In production or on live domain (redwork.ch), ALWAYS use current origin
+    return window.location.origin;
+  }
+  return "";
+};
+
+const BACKEND_URL = getBackendUrl();
 export const API = `${BACKEND_URL.replace(/\/$/, "")}/api`;
 
 const TOKEN_KEY = "redwork_auth_token";

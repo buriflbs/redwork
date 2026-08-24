@@ -37,9 +37,9 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(
     caches.match(req).then((cached) =>
       cached || fetch(req).then((res) => {
-        if (res.ok && (req.destination === "image" || req.destination === "style" || req.destination === "script" || req.destination === "font")) {
+        if (url.protocol.startsWith("http") && res.ok && (req.destination === "image" || req.destination === "style" || req.destination === "script" || req.destination === "font")) {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
+          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
         }
         return res;
       }).catch(() => cached)
