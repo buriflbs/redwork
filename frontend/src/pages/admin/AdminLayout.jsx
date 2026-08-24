@@ -3,7 +3,8 @@ import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Inbox, FolderKanban, FileText, MessageSquareQuote,
   Wrench, LogOut, Mail, Loader2, ExternalLink, Settings, HelpCircle,
-  Receipt, FileSignature, Building2, Package, Menu, X,
+  Receipt, FileSignature, Building2, Package, Server, Menu, X,
+  Users, ShoppingCart, MessageSquare, Zap, Gavel, ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import Logo from "../../components/Logo";
@@ -13,7 +14,17 @@ const groups = [
     label: "Übersicht",
     links: [
       { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
+      { to: "/admin/profile", label: "Profil & Sicherheit", icon: ShieldCheck },
       { to: "/admin/site", label: "Website-Inhalte", icon: Settings },
+    ],
+  },
+  {
+    label: "Kundenverwaltung",
+    links: [
+      { to: "/admin/customers", label: "Kunden", icon: Users },
+      { to: "/admin/orders", label: "Bestellungen", icon: ShoppingCart },
+      { to: "/admin/platform", label: "SaaS / WHM Control", icon: Zap },
+      { to: "/admin/tickets", label: "Support-Tickets", icon: MessageSquare },
     ],
   },
   {
@@ -38,7 +49,9 @@ const groups = [
     label: "Buchhaltung",
     links: [
       { to: "/admin/companies", label: "Firmen / Logos", icon: Building2 },
+      { to: "/admin/hosting", label: "Hosting-Pakete", icon: Server },
       { to: "/admin/products", label: "Produkte / Katalog", icon: Package },
+      { to: "/admin/platform", label: "Domain Auktionen", icon: Gavel },
       { to: "/admin/invoices", label: "Rechnungen", icon: Receipt },
       { to: "/admin/offers", label: "Offerten", icon: FileSignature },
       { to: "/admin/invoice-templates", label: "Rechnungs-Vorlagen", icon: FileText },

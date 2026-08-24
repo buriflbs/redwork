@@ -55,9 +55,16 @@ function renderRich(text) {
 }
 
 const FALLBACK = {
-  heroSlides: [{ highlight: "Reise", word: "Webdesign" }],
-  heroSubtitle: "",
-  heroTagline: "",
+  heroSlides: [
+    { highlight: "Unternehmens", word: "Webdesign" },
+    { highlight: "E-Commerce", word: "Webdesign" },
+    { highlight: "Persönliches", word: "Webdesign" },
+    { highlight: "Produkt", word: "Webdesign" },
+    { highlight: "Reise", word: "Webdesign" },
+    { highlight: "Stiftung", word: "Webdesign" },
+  ],
+  heroSubtitle: "Mit der <y>preisgekrönten</y> Webdesign- und Software-Agentur entdecken Sie\ndie <y>Weltklasse-Standards</y> auf Ihrer Website!",
+  heroTagline: "Wir sind anders, seien Sie auch anders.",
   badgeEnabled: true,
   badgeNumber: "12",
   badgeUnit: "MONATE",
@@ -69,9 +76,15 @@ const FALLBACK = {
   btnContactLarge: "Schreiben Sie uns",
   btnQuoteSmall: "Haben Sie ein Projekt ?",
   btnQuoteLarge: "Angebot einholen",
-  partners: [],
-  ratingStars: "★★★★★",
-  ratingText: "",
+  partners: [
+    "SCHWEIZER INFORMATIK & IT-ENGINEERING",
+    "FULL-STACK WEBENTWICKLUNG",
+    "CLOUD & INFRASTRUKTUR",
+    "CYBERSECURITY & DSGVO",
+    "INDIVIDUELLE SOFTWARE",
+  ],
+  ratingStars: "SYSTEM-STATUS AKTIV",
+  ratingText: "<b>100% Schweizer Hosting</b> & 24/7 IT-Monitoring",
 };
 
 export default function Hero() {
@@ -97,79 +110,91 @@ export default function Hero() {
   const slide = slides[idx % slides.length];
 
   return (
-    <section id="top" className="relative min-h-[100svh] sm:min-h-screen bg-[#020617] overflow-hidden flex items-start sm:items-center justify-center pt-24 sm:pt-0 pb-32 sm:pb-0">
+    <section id="top" className="relative min-h-[84vh] sm:min-h-[88vh] bg-[#020617] overflow-hidden flex items-center justify-center pt-24 sm:pt-28 md:pt-32 pb-16 sm:pb-20">
       <MatrixBg />
       <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
 
-      {/* Support Badge */}
+      {/* Support Badge (Directly anchored to section top-right, perfectly positioned near top of hero) */}
       {s.badgeEnabled && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 sm:left-auto sm:top-16 sm:right-4 z-20 pointer-events-none">
-          <div className="relative">
+        <div className="absolute top-20 sm:top-24 md:top-20 lg:top-22 xl:top-26 right-3 xs:right-4 sm:right-6 md:right-6 lg:right-10 xl:right-16 2xl:right-20 z-20 pointer-events-none">
+          <div className="relative pointer-events-auto">
             <div className="absolute inset-0 bg-[#E63946] rounded-full blur-2xl opacity-30 animate-pulse" />
-            <div className="relative w-24 h-24 sm:w-32 sm:h-32 md:w-44 md:h-44 lg:w-52 lg:h-52 rounded-full bg-gradient-to-br from-[#E63946] to-[#a8202e] border-2 border-white/20 flex flex-col items-center justify-center text-center text-white px-2 sm:px-3 md:px-5 shadow-2xl">
-              <ShieldCheck size={22} className="text-[#FFC107] mb-1" />
-              <div className="text-[#FFC107] font-extrabold text-[22px] sm:text-[26px] leading-none">{s.badgeNumber}</div>
-              <div className="text-[10px] sm:text-[11px] font-bold tracking-wider mt-1">{s.badgeUnit}</div>
-              <div className="text-[10px] sm:text-[12px] font-semibold mt-1 leading-tight">
+            <div className="relative w-24 h-24 xs:w-26 xs:h-26 sm:w-28 sm:h-28 md:w-52 md:h-52 lg:w-60 lg:h-60 xl:w-56 xl:h-56 2xl:w-60 2xl:h-60 rounded-full bg-gradient-to-br from-[#E63946] to-[#a8202e] border-2 border-white/20 flex flex-col items-center justify-center text-center text-white px-2 xs:px-2.5 sm:px-3 md:px-5 lg:px-6 shadow-2xl transition-transform duration-300 hover:scale-105 select-none">
+              <ShieldCheck className="w-4 h-4 xs:w-4.5 xs:h-4.5 sm:w-5 sm:h-5 md:w-7 md:h-7 lg:w-8 lg:h-8 text-[#FFC107] mb-0.5" />
+              <div className="text-[#FFC107] font-extrabold text-[17px] xs:text-[19px] sm:text-[21px] md:text-[34px] lg:text-[38px] xl:text-[36px] leading-none">{s.badgeNumber}</div>
+              <div className="text-[7.5px] xs:text-[8px] sm:text-[9px] md:text-[12.5px] lg:text-[14px] xl:text-[13px] font-bold tracking-wider mt-0.5 sm:mt-1">{s.badgeUnit}</div>
+              <div className="text-[7.5px] xs:text-[8px] sm:text-[9px] md:text-[13px] lg:text-[15px] xl:text-[14px] font-semibold mt-0.5 sm:mt-1 leading-tight">
                 {s.badgeText1}
                 <br />
-                <span className="text-[#FFC107]">{s.badgeText2}</span>
+                <span className="text-[#FFC107] font-bold">{s.badgeText2}</span>
               </div>
-              <div className="text-[9px] sm:text-[10px] mt-1 opacity-80">{s.badgeFooter1}</div>
-              <div className="text-[9px] sm:text-[10px] mt-0.5 opacity-80 font-bold">{s.badgeFooter2}</div>
+              <div className="text-[6.5px] xs:text-[7px] sm:text-[8px] md:text-[11px] lg:text-[12.5px] xl:text-[12px] mt-0.5 sm:mt-1 opacity-80 leading-none">{s.badgeFooter1}</div>
+              <div className="text-[6.5px] xs:text-[7px] sm:text-[8px] md:text-[11px] lg:text-[12.5px] xl:text-[12px] mt-0.5 opacity-90 font-bold leading-none">{s.badgeFooter2}</div>
             </div>
           </div>
         </div>
       )}
 
-      <div className="relative z-30 text-center px-4 sm:px-6 max-w-5xl w-full">
-        <div className="min-h-[80px] sm:min-h-[120px] md:min-h-[160px] flex items-center justify-center">
-          <h1 key={idx} className="fade-in text-[28px] sm:text-[40px] md:text-[68px] font-extrabold tracking-tight text-balance leading-tight">
+      {/* Main Slider Content Block (Shifted down on mobile with mt-20 sm:mt-24, untouched on md+) */}
+      <div className="relative z-30 text-center max-w-2xl md:max-w-[480px] lg:max-w-[620px] xl:max-w-[780px] 2xl:max-w-5xl mx-auto w-full px-4 sm:px-6 mt-20 sm:mt-24 md:mt-0">
+        <div className="flex items-center justify-center">
+          <h1 key={idx} className="fade-in text-[34px] sm:text-[46px] md:text-[56px] lg:text-[66px] xl:text-[72px] 2xl:text-[80px] font-extrabold tracking-tight text-balance leading-[1.08]">
             <span className="text-[#1E88E5]">{slide.highlight}</span>
             <span className="text-white"> {slide.word}</span>
           </h1>
         </div>
 
-        <p className="text-white/85 text-[14px] sm:text-[16px] md:text-[20px] mt-3 sm:mt-4 leading-relaxed max-w-3xl mx-auto px-2">
+        <p className="text-white/85 text-[16px] sm:text-[18px] md:text-[20px] lg:text-[21px] xl:text-[22px] mt-4 sm:mt-5 md:mt-6 leading-relaxed md:leading-[1.6] max-w-2xl lg:max-w-3xl mx-auto px-2">
           {renderRich(s.heroSubtitle)}
         </p>
         {s.heroTagline && (
-          <p className="text-[#FFC107] font-semibold text-[13px] sm:text-[15px] md:text-[18px] mt-2">
+          <p className="text-[#FFC107] font-semibold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[20px] mt-2.5 md:mt-3">
             {s.heroTagline}
           </p>
         )}
 
-        <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center relative z-30">
-          <button onClick={openContact} data-testid="hero-contact-btn" className="btn-cta btn-red w-full sm:w-auto relative z-30">
-            <span className="text-[11px] font-normal opacity-90">{s.btnContactSmall}</span>
-            <span className="text-[15px] sm:text-[17px]">{s.btnContactLarge}</span>
+        <div className="mt-7 sm:mt-9 md:mt-10 flex flex-col sm:flex-row gap-3.5 sm:gap-5 md:gap-6 justify-center items-center relative z-30">
+          <button onClick={openContact} data-testid="hero-contact-btn" className="btn-cta btn-red w-full sm:w-auto relative z-30 py-3.5 px-7 md:px-9">
+            <span className="text-[13px] md:text-[14px] font-normal opacity-90">{s.btnContactSmall}</span>
+            <span className="text-[18px] sm:text-[20px] md:text-[22px] font-bold">{s.btnContactLarge}</span>
           </button>
-          <button onClick={() => openQuote()} data-testid="hero-quote-btn" className="btn-cta btn-blue w-full sm:w-auto relative z-30">
-            <span className="text-[11px] font-normal opacity-90">{s.btnQuoteSmall}</span>
-            <span className="text-[15px] sm:text-[17px]">{s.btnQuoteLarge}</span>
+          <button onClick={() => openQuote()} data-testid="hero-quote-btn" className="btn-cta btn-blue w-full sm:w-auto relative z-30 py-3.5 px-7 md:px-9">
+            <span className="text-[13px] md:text-[14px] font-normal opacity-90">{s.btnQuoteSmall}</span>
+            <span className="text-[18px] sm:text-[20px] md:text-[22px] font-bold">{s.btnQuoteLarge}</span>
           </button>
         </div>
       </div>
 
       <div
-        className="hidden sm:block absolute bottom-16 left-1/2 -translate-x-1/2 z-10 text-white/70 bouncing-arrow cursor-pointer"
+        className="hidden sm:block absolute bottom-14 sm:bottom-16 left-1/2 -translate-x-1/2 z-10 text-white/70 bouncing-arrow cursor-pointer"
         onClick={() => document.getElementById("stats")?.scrollIntoView({ behavior: "smooth" })}
+        aria-label="Nach unten scrollen"
       >
         <ChevronsDown size={36} />
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 bg-black/90 py-2 sm:py-3 px-3 sm:px-6 z-10">
-        <div className="max-w-[1400px] mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-4 text-white text-xs">
-          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+      {/* IT & Informatik Competencies & Ratings Bottom Bar */}
+      <div className="absolute bottom-0 left-0 right-0 bg-[#020617]/95 backdrop-blur-md py-2.5 sm:py-3.5 px-3 sm:px-6 lg:px-8 z-10 border-t border-white/10">
+        <div className="max-w-[1400px] mx-auto flex flex-col md:flex-row items-center justify-between gap-2.5 sm:gap-4 text-white text-xs">
+          <div className="flex items-center justify-center md:justify-start gap-2 sm:gap-3 lg:gap-5 flex-wrap">
             {(s.partners || []).map((p, i) => (
-              <span key={i} className="font-bold text-[9px] sm:text-[10px] tracking-wider opacity-80">{p}</span>
+              <span key={i} className="inline-flex items-center gap-1.5 font-bold text-[9px] sm:text-[10px] md:text-[10.5px] lg:text-[11px] tracking-wider text-slate-300 hover:text-white transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1E88E5] shrink-0 shadow-[0_0_6px_rgba(30,136,229,0.8)]" />
+                {p}
+              </span>
             ))}
           </div>
           {s.ratingText && (
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-[#4285F4] font-bold">G</span>
-              <span className="text-[#FFC107]">{s.ratingStars}</span>
-              <span className="text-white/90">{renderRich(s.ratingText)}</span>
+            <div className="flex items-center gap-2.5 bg-emerald-950/40 border border-emerald-500/30 px-3.5 py-1.5 rounded-full shrink-0 shadow-sm backdrop-blur-sm">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-emerald-400 font-bold text-[10px] sm:text-[11px] tracking-wider uppercase">
+                {s.ratingStars || "SYSTEM-STATUS"}
+              </span>
+              <span className="text-white/30 text-xs hidden sm:inline">•</span>
+              <span className="text-white/95 text-[10.5px] sm:text-[11.5px] font-medium">{renderRich(s.ratingText)}</span>
             </div>
           )}
         </div>

@@ -21,6 +21,8 @@ DEFAULT_EMAIL_TEMPLATES = [
     {"name": "Go-Live Bestätigung", "category": "Projekt", "subject": "🎉 Ihre Website ist live!", "body": "Hallo {{name}},\n\nherzlichen Glückwunsch – Ihre neue Website ist seit heute online unter ___ erreichbar!\n\nDie nächsten 12 Monate Support sind inklusive.\n\nFreundliche Grüsse"},
     {"name": "Rechnung versendet", "category": "Rechnung", "subject": "Ihre Rechnung von redwork.ch", "body": "Hallo {{name}},\n\nim Anhang erhalten Sie wie vereinbart unsere Rechnung Nr. ___ über CHF ___.\n\nZahlbar bis ___ via QR-Code direkt im E-Banking.\n\nFreundliche Grüsse"},
     {"name": "Zahlungserinnerung freundlich", "category": "Rechnung", "subject": "Freundliche Zahlungserinnerung – Rechnung Nr. ___", "body": "Hallo {{name}},\n\nuns ist aufgefallen, dass die Rechnung Nr. ___ über CHF ___ noch offen ist. Falls bereits beglichen, betrachten Sie diese Mail bitte als gegenstandslos.\n\nFreundliche Grüsse"},
+    {"name": "Mahnung 1. Stufe", "category": "Rechnung", "subject": "Mahnung – Rechnung Nr. ___ (CHF 20 Mahngebühr)", "body": "Hallo {{name}},\n\nleider ist die Rechnung Nr. ___ über CHF ___ noch nicht beglichen. Wir senden Ihnen hiermit die erste Mahnung und erheben eine Mahngebühr von CHF 20.\n\nBitte überweisen Sie den Betrag von CHF ___ bis zum ___ auf unser Konto.\n\nFreundliche Grüsse"},
+    {"name": "Mahnung 2. Stufe", "category": "Rechnung", "subject": "Zweite Mahnung – Rechnung Nr. ___ (CHF 60 Mahngebühr + Inkassowarnung)", "body": "Hallo {{name}},\n\nobwohl wir Ihnen bereits eine erste Mahnung gesendet haben, ist die Rechnung Nr. ___ über CHF ___ noch immer offen. Wir erheben eine zweite Mahngebühr von CHF 60 und warnen Sie, dass wir bei weiterer Nichtzahlung das Inkasso-Verfahren einleiten werden.\n\nBitte überweisen Sie den Gesamtbetrag von CHF ___ bis zum ___ auf unser Konto.\n\nFreundliche Grüsse"},
     {"name": "Wartungserinnerung", "category": "Wartung", "subject": "Geplante Wartung Ihrer Website", "body": "Hallo {{name}},\n\nim Rahmen unseres Wartungsvertrags planen wir am ___ zwischen ___ und ___ Uhr ein Wartungsfenster.\n\nKurze Unterbrechungen möglich, alle Daten werden vorher gesichert.\n\nFreundliche Grüsse"},
     {"name": "Anfrage abgelehnt – höflich", "category": "Allgemein", "subject": "Zu Ihrer Anfrage", "body": "Hallo {{name}},\n\nvielen Dank, dass Sie uns für Ihr Vorhaben in Betracht gezogen haben. Leider sind unsere Kapazitäten in den nächsten Monaten bereits ausgebucht.\n\nGerne empfehle ich Ihnen Partner-Agenturen.\n\nFreundliche Grüsse"},
     {"name": "Beratung statt Auftrag", "category": "Beratung", "subject": "Buchung einer kostenpflichtigen Beratung", "body": "Hallo {{name}},\n\nfür Ihre Anfrage ist eine 60-minütige Strategie-Beratung möglicherweise zielführender als ein direkter Projektauftrag.\n\nKosten: CHF 240 (wird bei späterem Auftrag verrechnet).\n\nFreundliche Grüsse"},
@@ -31,6 +33,21 @@ DEFAULT_EMAIL_TEMPLATES = [
     {"name": "Abwesenheitsnotiz", "category": "Allgemein", "subject": "Aktuell ausser Haus – Antwort ab ___", "body": "Hallo {{name}},\n\nvielen Dank für Ihre Nachricht. Ich bin bis ___ ausser Haus.\n\nIn dringenden Fällen wenden Sie sich bitte an ___@redwork.ch.\n\nFreundliche Grüsse"},
     {"name": "Jahreswechsel-Gruss", "category": "Allgemein", "subject": "Frohes neues Jahr und vielen Dank!", "body": "Hallo {{name}},\n\nbevor das Jahr endet, möchten wir uns für die vertrauensvolle Zusammenarbeit bedanken.\n\nWir wünschen erholsame Festtage und einen erfolgreichen Start ins neue Jahr!\n\nHerzliche Grüsse\nIhr redwork.ch-Team"},
     {"name": "Projekt-Pause", "category": "Projekt", "subject": "Bestätigung der vorübergehenden Projekt-Pause", "body": "Hallo {{name}},\n\nwie besprochen pausieren wir Ihr Projekt vom ___ bis ___. In dieser Zeit fallen keine Stunden an.\n\nFreundliche Grüsse"},
+]
+
+
+# ---------------------------------------------------------------------------
+# Response Templates for Contacts & Tickets
+# ---------------------------------------------------------------------------
+DEFAULT_RESPONSE_TEMPLATES = [
+    {"name": "Eingangsbestätigung Kontakt", "category": "Kontakt", "body": "Hallo {{name}},\n\nvielen Dank für Ihre Kontaktanfrage. Wir haben Ihre Nachricht erhalten und werden uns innerhalb von 24 Stunden bei Ihnen melden.\n\nFreundliche Grüsse\nIhr redwork.ch-Team"},
+    {"name": "Angebot-Anfrage", "category": "Kontakt", "body": "Hallo {{name}},\n\nvielen Dank für Ihr Interesse. Basierend auf Ihrer Beschreibung erstellen wir ein individuelles Angebot. Sie erhalten dieses in den nächsten 2-3 Arbeitstagen.\n\nFreundliche Grüsse"},
+    {"name": "Projekt-Start", "category": "Kontakt", "body": "Hallo {{name}},\n\nwir freuen uns, dass Sie sich für uns entschieden haben! Als nächstes senden wir Ihnen den Vertrag und die Rechnung. Nach Zahlungseingang starten wir sofort mit Ihrem Projekt.\n\nFreundliche Grüsse"},
+    {"name": "Ticket Eingangsbestätigung", "category": "Ticket", "subject": "Ihr Support-Ticket wurde erstellt", "body": "Hallo {{name}},\n\nIhr Support-Ticket wurde erfolgreich erstellt. Wir bearbeiten es innerhalb von 24 Stunden.\n\nTicket-ID: {{ticket_id}}\n\nFreundliche Grüsse"},
+    {"name": "Ticket in Bearbeitung", "category": "Ticket", "subject": "Update zu Ihrem Support-Ticket", "body": "Hallo {{name}},\n\nIhr Ticket ist nun in Bearbeitung. Wir halten Sie auf dem Laufenden.\n\nFreundliche Grüsse"},
+    {"name": "Ticket gelöst", "category": "Ticket", "subject": "Ihr Support-Ticket wurde gelöst", "body": "Hallo {{name}},\n\nIhr Support-Ticket wurde erfolgreich gelöst. Falls weitere Fragen auftauchen, können Sie jederzeit ein neues Ticket erstellen.\n\nFreundliche Grüsse"},
+    {"name": "Hosting-Problem", "category": "Ticket", "subject": "Update zu Ihrem Hosting-Problem", "body": "Hallo {{name}},\n\nwir haben das Problem identifiziert und arbeiten an der Lösung. Ihr Hosting sollte in Kürze wieder normal funktionieren.\n\nFreundliche Grüsse"},
+    {"name": "Domain-Problem", "category": "Ticket", "subject": "Update zu Ihrer Domain-Anfrage", "body": "Hallo {{name}},\n\nwir haben Ihre Domain-Anfrage bearbeitet. Die Änderungen sollten innerhalb von 24-48 Stunden wirksam werden.\n\nFreundliche Grüsse"},
 ]
 
 
@@ -271,6 +288,9 @@ DEFAULT_PRODUCT_CATEGORIES = [
     {"name": "Hosting & Wartung", "description": "Hosting, Domain, laufende Wartung", "order": 4},
     {"name": "Branding & Design", "description": "Logo, CI, Druck", "order": 5},
     {"name": "Beratung", "description": "Strategie & Beratungsleistungen", "order": 6},
+    {"name": "Hosting", "description": "Webhosting, VPS, Dedicated Server", "order": 7},
+    {"name": "Domains", "description": "Domain-Registrierung", "order": 8},
+    {"name": "SSL-Zertifikate", "description": "SSL-Sicherheit", "order": 9},
 ]
 
 
@@ -295,4 +315,77 @@ DEFAULT_PRODUCTS = [
     {"name": "Foto-Shooting halber Tag", "description": "Professionelle Fotos vor Ort, 4 Stunden", "unitPrice": 950.0, "unit": "Tag", "order": 18},
     {"name": "Fotoshooting ganzer Tag", "description": "Professionelle Fotos vor Ort, 8 Stunden inkl. Bildbearbeitung", "unitPrice": 1750.0, "unit": "Tag", "order": 19},
     {"name": "Mehrsprachigkeit Aufpreis", "description": "Pro zusätzliche Sprache (DE→FR/IT/EN), inkl. Übersetzung", "unitPrice": 650.0, "unit": "Sprache", "order": 20},
+    # Hosting products
+    {"categoryId": "hosting", "name": "Webhosting Basic", "description": "1 Website, 10 GB Speicher, unbegrenzter Traffic, SSL, E-Mail", "unitPrice": 9.90, "unit": "Monat", "order": 21},
+    {"categoryId": "hosting", "name": "Webhosting Professional", "description": "5 Websites, 50 GB Speicher, unbegrenzter Traffic, SSL, E-Mail, Backup", "unitPrice": 19.90, "unit": "Monat", "order": 22},
+    {"categoryId": "hosting", "name": "Webhosting Enterprise", "description": "Unbegrenzte Websites, 200 GB Speicher, unbegrenzter Traffic, SSL, E-Mail, täglich Backup, CDN", "unitPrice": 49.90, "unit": "Monat", "order": 23},
+    {"categoryId": "hosting", "name": "VPS Basic", "description": "1 vCPU, 2 GB RAM, 20 GB SSD, unbegrenzter Traffic", "unitPrice": 29.90, "unit": "Monat", "order": 24},
+    {"categoryId": "hosting", "name": "VPS Professional", "description": "2 vCPU, 4 GB RAM, 40 GB SSD, unbegrenzter Traffic", "unitPrice": 49.90, "unit": "Monat", "order": 25},
+    {"categoryId": "hosting", "name": "VPS Enterprise", "description": "4 vCPU, 8 GB RAM, 80 GB SSD, unbegrenzter Traffic", "unitPrice": 99.90, "unit": "Monat", "order": 26},
+    {"categoryId": "hosting", "name": "Dedicated Server Basic", "description": "Intel i3, 8 GB RAM, 500 GB HDD, 100 Mbit/s", "unitPrice": 149.90, "unit": "Monat", "order": 27},
+    {"categoryId": "hosting", "name": "Dedicated Server Professional", "description": "Intel i5, 16 GB RAM, 1 TB SSD, 1 Gbit/s", "unitPrice": 249.90, "unit": "Monat", "order": 28},
+    {"categoryId": "hosting", "name": "Dedicated Server Enterprise", "description": "Intel i7, 32 GB RAM, 2 TB SSD, 1 Gbit/s, Managed", "unitPrice": 399.90, "unit": "Monat", "order": 29},
+    {"categoryId": "domains", "name": ".ch Domain", "description": "Schweizer Domain-Registrierung", "unitPrice": 15.00, "unit": "Jahr", "order": 30},
+    {"categoryId": "domains", "name": ".com Domain", "description": "Internationale Domain-Registrierung", "unitPrice": 12.00, "unit": "Jahr", "order": 31},
+    {"categoryId": "domains", "name": ".de Domain", "description": "Deutsche Domain-Registrierung", "unitPrice": 8.00, "unit": "Jahr", "order": 32},
+    {"categoryId": "ssl", "name": "SSL Basic (DV)", "description": "Domain Validation SSL-Zertifikat", "unitPrice": 25.00, "unit": "Jahr", "order": 33},
+    {"categoryId": "ssl", "name": "SSL Professional (OV)", "description": "Organization Validation SSL-Zertifikat", "unitPrice": 75.00, "unit": "Jahr", "order": 34},
+    {"categoryId": "ssl", "name": "SSL Enterprise (EV)", "description": "Extended Validation SSL-Zertifikat", "unitPrice": 150.00, "unit": "Jahr", "order": 35},
+]
+
+# Empty defaults for other collections
+DEFAULT_PROJECTS = []
+DEFAULT_BLOGS = []
+DEFAULT_TESTIMONIALS = []
+DEFAULT_SERVICES = []
+DEFAULT_COMPANIES = []
+
+# ---------------------------------------------------------------------------
+# Test Users for Development
+# ---------------------------------------------------------------------------
+# Test Users (password for all test users: Password123)
+# ---------------------------------------------------------------------------
+DEFAULT_TEST_USERS = [
+    {
+        "_id": "test-user-001",
+        "email": "kunde@test.ch",
+        "passwordHash": "$2b$12$aFb/DJ3nIAYDa.Rq80GTtu4OnJo9ymCH1CwMrn0SHO8b.m68NmxzG",
+        "firstName": "Max",
+        "lastName": "Mustermann",
+        "company": "Test GmbH",
+        "phone": "+41 79 123 45 67",
+        "emailVerified": True,
+        "role": "customer",
+        "deleted": False,
+        "createdAt": "2024-01-01T00:00:00Z",
+        "lastLogin": None
+    },
+    {
+        "_id": "test-user-002",
+        "email": "anna@test.ch",
+        "passwordHash": "$2b$12$aFb/DJ3nIAYDa.Rq80GTtu4OnJo9ymCH1CwMrn0SHO8b.m68NmxzG",
+        "firstName": "Anna",
+        "lastName": "Schmidt",
+        "company": "Anna's Boutique",
+        "phone": "+41 79 987 65 43",
+        "emailVerified": True,
+        "role": "customer",
+        "deleted": False,
+        "createdAt": "2024-01-15T00:00:00Z",
+        "lastLogin": None
+    },
+    {
+        "_id": "test-user-003",
+        "email": "peter@test.ch",
+        "passwordHash": "$2b$12$aFb/DJ3nIAYDa.Rq80GTtu4OnJo9ymCH1CwMrn0SHO8b.m68NmxzG",
+        "firstName": "Peter",
+        "lastName": "Weber",
+        "company": "Weber Consulting",
+        "phone": "+41 44 555 12 34",
+        "emailVerified": True,
+        "role": "customer",
+        "deleted": False,
+        "createdAt": "2024-02-01T00:00:00Z",
+        "lastLogin": None
+    }
 ]

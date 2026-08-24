@@ -1,12 +1,15 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Response, WebSocket, Request
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 import os
+import time
+import secrets
 import logging
 import uuid
 import smtplib
@@ -19,9 +22,11 @@ from email.mime.application import MIMEApplication
 from email.utils import formataddr
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
-from seed_data import DEFAULT_FAQS, DEFAULT_EMAIL_TEMPLATES, DEFAULT_PRODUCT_CATEGORIES, DEFAULT_PRODUCTS
+from seed_data import DEFAULT_FAQS, DEFAULT_EMAIL_TEMPLATES, DEFAULT_RESPONSE_TEMPLATES, DEFAULT_PRODUCT_CATEGORIES, DEFAULT_PRODUCTS, DEFAULT_PROJECTS, DEFAULT_BLOGS, DEFAULT_TESTIMONIALS, DEFAULT_SERVICES, DEFAULT_COMPANIES, DEFAULT_TEST_USERS
 from qr_invoice import build_invoice_pdf, build_offer_pdf, render_invoice_html, render_offer_html
 
 ROOT_DIR = Path(__file__).parent
@@ -30,9 +35,9 @@ load_dotenv(ROOT_DIR / ".env")
 # ----------------------------------------------------------------------------
 # Setup
 # ----------------------------------------------------------------------------
-mongo_url = os.environ["MONGO_URL"]
+mongo_url = os.environ.get("MONGO_URL", "mongodb://127.0.0.1:27017")
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+db = client[os.environ.get("DB_NAME", "redwork")]
 
 SECRET_KEY = os.environ.get("JWT_SECRET", "redwork-ch-super-secret-change-in-prod-2026")
 ALGORITHM = "HS256"
@@ -41,11 +46,135 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 ADMIN_USER = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "Blevh4np1@@")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
+
+def hash_password(password: str) -> str:
+    """Securely hash a password using bcrypt."""
+    pwd_bytes = password.encode("utf-8")[:72]
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Securely verify a password against a hash."""
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        pwd_bytes = plain_password.encode("utf-8")[:72]
+        hash_bytes = hashed_password.encode("utf-8")
+        return bcrypt.checkpw(pwd_bytes, hash_bytes)
+    except Exception as e:
+        logger.warning(f"Password verification failed with exception: {e}")
+        return False
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/admin/login", auto_error=False)
 
+# ----------------------------------------------------------------------------
+# Brute Force & Rate Limiting Guard
+# ----------------------------------------------------------------------------
+class LoginRateLimiter:
+    """Sliding-window rate limiter with progressive backoff and temporary lockout."""
+    def __init__(self, max_attempts: int = 5, window_seconds: int = 300, lockout_seconds: int = 900):
+        self.max_attempts = max_attempts
+        self.window_seconds = window_seconds
+        self.lockout_seconds = lockout_seconds
+        self.attempts: Dict[str, List[float]] = {}
+        self.lockouts: Dict[str, float] = {}
+
+    def is_locked(self, key: str) -> Tuple[bool, int]:
+        now = time.time()
+        if key in self.lockouts:
+            remaining = int(self.lockouts[key] - now)
+            if remaining > 0:
+                return True, remaining
+            del self.lockouts[key]
+        return False, 0
+
+    def record_failure(self, key: str):
+        now = time.time()
+        if key not in self.attempts:
+            self.attempts[key] = []
+        self.attempts[key] = [t for t in self.attempts[key] if now - t < self.window_seconds]
+        self.attempts[key].append(now)
+        
+        if len(self.attempts[key]) >= self.max_attempts:
+            self.lockouts[key] = now + self.lockout_seconds
+            self.attempts.pop(key, None)
+
+    def record_success(self, key: str):
+        self.attempts.pop(key, None)
+        self.lockouts.pop(key, None)
+
+    def get_attempt_count(self, key: str) -> int:
+        now = time.time()
+        if key not in self.attempts:
+            return 0
+        self.attempts[key] = [t for t in self.attempts[key] if now - t < self.window_seconds]
+        return len(self.attempts[key])
+
+login_limiter = LoginRateLimiter(max_attempts=5, window_seconds=300, lockout_seconds=900)
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "127.0.0.1"
+
+def verify_admin_password(plain_password: str) -> bool:
+    if secrets.compare_digest(plain_password, ADMIN_PASS):
+        return True
+    try:
+        if ADMIN_PASS.startswith("$2b$") or ADMIN_PASS.startswith("$2a$"):
+            if verify_password(plain_password, ADMIN_PASS):
+                return True
+    except Exception:
+        pass
+    return False
+
 app = FastAPI(title="redwork.ch API")
+
+@app.middleware("http")
+async def security_and_limit_middleware(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > 10 * 1024 * 1024:
+        return JSONResponse(status_code=413, content={"detail": "Anfrage ist zu gross (max 10MB)"})
+
+    response = await call_next(request)
+
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
+
 api_router = APIRouter(prefix="/api")
+
+# Scheduler for automated tasks
+scheduler = AsyncIOScheduler()
+
+# WebSocket connections for real-time notifications
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                self.disconnect(connection)
+
+manager = ConnectionManager()
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -67,6 +196,18 @@ class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: dict
+
+
+class AdminProfileUpdateIn(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    fullName: Optional[str] = None
+
+
+class AdminPasswordChangeIn(BaseModel):
+    currentPassword: str
+    newPassword: str
+    newPasswordConfirm: Optional[str] = None
 
 
 # ----- Quote (Angebot einholen Lead) -----
@@ -221,16 +362,19 @@ class SiteSettings(BaseModel):
     btnQuoteSmall: str = "Haben Sie ein Projekt ?"
     btnQuoteLarge: str = "Angebot einholen"
     partners: List[str] = [
-        "GOOGLE PARTNER", "BING ADS", "YANDEX PARTNER",
-        "MICROSOFT GOLD PARTNER", "ADOBE SOLUTION PARTNER",
+        "SCHWEIZER INFORMATIK & IT-ENGINEERING",
+        "FULL-STACK WEBENTWICKLUNG",
+        "CLOUD & INFRASTRUKTUR",
+        "CYBERSECURITY & DSGVO",
+        "INDIVIDUELLE SOFTWARE",
     ]
-    ratingStars: str = "★★★★★"
-    ratingText: str = "Sehen Sie sich unsere <b>168 Bewertungen</b> an !"
+    ratingStars: str = "SYSTEM-STATUS AKTIV"
+    ratingText: str = "<b>100% Schweizer Hosting</b> & 24/7 IT-Monitoring"
     stats: List[StatItem] = [
-        StatItem(number="61.300.000", suffix="+", label="Geschriebene Codezeilen"),
-        StatItem(number="415.000", suffix="+", label="Einzigartige Webseiten"),
-        StatItem(number="860", suffix="+", label="Abgeschlossene Projekte"),
-        StatItem(number="2.100", suffix="+", label="Zufriedene Kunden"),
+        StatItem(number="2.450.000", suffix="+", label="Geschriebene Codezeilen"),
+        StatItem(number="1.200", suffix="+", label="Einzigartige Webseiten"),
+        StatItem(number="850", suffix="+", label="Abgeschlossene Projekte"),
+        StatItem(number="620", suffix="+", label="Zufriedene Kunden"),
     ]
     navItems: List[dict] = [
         {"label": "start", "href": "#top"},
@@ -258,15 +402,16 @@ class SiteSettings(BaseModel):
     promoVideoUrl: str = ""
     promoVideoTitle: str = "Lernen Sie uns in 90 Sekunden kennen"
     promoVideoSubtitle: str = "Ein kurzer Einblick in unsere Arbeitsweise"
-    # Contact section
+    # Header & Contact section
+    headerPhone: str = "+41 76 298 10 15"
     contactTitle: str = "Kontakt"
     contactSubtitle: str = "Lassen Sie uns sprechen"
     contactIntro: str = "Wir freuen uns auf Ihre Nachricht. Wählen Sie den Kanal, der Ihnen am liebsten ist – wir antworten innerhalb von 24 Stunden."
-    contactPhone: str = "+41 44 000 00 00"
+    contactPhone: str = "+41 76 298 10 15"
     contactPhoneHours: str = "Mo–Fr 8–18 Uhr"
     contactEmail: str = "info@redwork.ch"
     contactEmailNote: str = "Antwort innert 24 h"
-    contactWhatsapp: str = "+41 79 000 00 00"
+    contactWhatsapp: str = "+41 76 298 10 15"
     contactAddress: str = "Bahnhofstrasse 1, 8001 Zürich"
     contactMapUrl: str = "https://www.openstreetmap.org/export/embed.html?bbox=8.5392%2C47.3705%2C8.5444%2C47.3735&layer=mapnik"
     # FAQ section
@@ -275,7 +420,7 @@ class SiteSettings(BaseModel):
     # Footer
     footerAbout: str = "redwork.ch ist Ihre Schweizer Premium-Agentur für Webdesign, Software-Entwicklung, SEO und digitales Marketing."
     footerAddress: str = "Bahnhofstrasse 1, 8001 Zürich, Schweiz"
-    footerPhone: str = "+41 44 000 00 00"
+    footerPhone: str = "+41 76 298 10 15"
     footerEmail: str = "info@redwork.ch"
     footerLinks: List[str] = []
     footerCopyright: str = "© 2026 redwork.ch – Alle Rechte vorbehalten"
@@ -308,6 +453,34 @@ class EmailTemplateIn(BaseModel):
 
 class EmailTemplate(EmailTemplateIn):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    createdAt: datetime = Field(default_factory=now_utc)
+
+
+# ----- Response Template -----
+class ResponseTemplateIn(BaseModel):
+    name: str
+    category: str = "Allgemein"  # "Kontakt" or "Ticket"
+    subject: Optional[str] = ""  # For tickets
+    body: str
+
+
+class ResponseTemplate(ResponseTemplateIn):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    createdAt: datetime = Field(default_factory=now_utc)
+
+
+# ----- Newsletter Campaign -----
+class NewsletterIn(BaseModel):
+    subject: str
+    body: str
+    targetGroup: str = "all"  # all, active_customers, etc.
+    htmlBody: Optional[str] = ""
+
+
+class Newsletter(NewsletterIn):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    sentAt: Optional[datetime] = None
+    recipientCount: int = 0
     createdAt: datetime = Field(default_factory=now_utc)
 
 
@@ -377,6 +550,7 @@ class InvoiceItem(BaseModel):
 
 class InvoiceIn(BaseModel):
     companyId: Optional[str] = ""  # which of our companies
+    userId: Optional[str] = ""  # optional customer relation
     title: Optional[str] = ""
     intro: Optional[str] = ""
     notes: Optional[str] = ""
@@ -392,8 +566,10 @@ class InvoiceIn(BaseModel):
     vatRate: Optional[float] = None
     currency: Optional[str] = "CHF"
     reference: Optional[str] = ""
-    status: str = "draft"  # draft | sent | paid | overdue
+    status: str = "draft"  # draft | sent | paid | overdue | reminder_sent | dunning_sent | collection_warning
     type: str = "invoice"  # "invoice" | "offer"
+    reminderCount: int = 0
+    lastReminderAt: Optional[datetime] = None
     # Recurring
     recurring: bool = False
     recurringInterval: Optional[str] = "monthly"  # monthly | quarterly | yearly
@@ -410,6 +586,7 @@ class Invoice(InvoiceIn):
     total: float = 0.0
     sentAt: Optional[datetime] = None
     paidAt: Optional[datetime] = None
+    invoiceLogs: List[dict] = []
     # Public signing (offers)
     publicToken: str = Field(default_factory=lambda: uuid.uuid4().hex)
     signedAt: Optional[datetime] = None
@@ -425,6 +602,142 @@ class InvoiceSendIn(BaseModel):
     subject: Optional[str] = ""
     message: Optional[str] = ""
     toEmail: Optional[str] = ""
+
+
+# ----- User (Customer) - MongoDB Compatible -----
+class UserRegisterIn(BaseModel):
+    email: EmailStr
+    password: str
+    firstName: str
+    lastName: str
+    company: Optional[str] = ""
+    phone: Optional[str] = ""
+
+
+class UserLoginIn(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserUpdateIn(BaseModel):
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    company: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class PasswordResetRequestIn(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetIn(BaseModel):
+    token: str
+    newPassword: str
+
+
+class UserResponse(BaseModel):
+    id: str  # Returns _id as id
+    email: str
+    firstName: str
+    lastName: str
+    company: Optional[str]
+    phone: Optional[str]
+    emailVerified: bool
+    createdAt: datetime
+    lastLogin: Optional[datetime]
+    role: str = "customer"
+
+
+# MongoDB User Document Structure
+def create_user_doc(
+    email: str,
+    password_hash: str,
+    first_name: str,
+    last_name: str,
+    company: str = "",
+    phone: str = ""
+) -> dict:
+    """Create a new user document for MongoDB."""
+    return {
+        "_id": str(uuid.uuid4()),
+        "email": email,
+        "passwordHash": password_hash,
+        "firstName": first_name,
+        "lastName": last_name,
+        "company": company or "",
+        "phone": phone or "",
+        "emailVerified": True,  # Auto-verify for now
+        "emailVerificationToken": None,
+        "passwordResetToken": None,
+        "passwordResetExpires": None,
+        "createdAt": now_utc(),
+        "lastLogin": None,
+        "role": "customer",
+        "deleted": False
+    }
+
+
+# Helper to convert MongoDB doc to response
+def user_doc_to_response(doc: dict) -> dict:
+    """Convert MongoDB user document to response format."""
+    if not doc:
+        return None
+    return {
+        "id": doc.get("_id"),
+        "email": doc.get("email"),
+        "firstName": doc.get("firstName"),
+        "lastName": doc.get("lastName"),
+        "company": doc.get("company"),
+        "phone": doc.get("phone"),
+        "emailVerified": doc.get("emailVerified", False),
+        "createdAt": doc.get("createdAt"),
+        "lastLogin": doc.get("lastLogin"),
+        "role": doc.get("role", "customer")
+    }
+
+
+# ----- Order (Customer Orders) -----
+class OrderIn(BaseModel):
+    productId: str
+    duration: str  # "monthly" | "yearly"
+    quantity: int = 1
+
+
+class Order(OrderIn):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    userId: str
+    status: str = "pending"  # pending | paid | active | cancelled | expired
+    total: float = 0.0
+    createdAt: datetime = Field(default_factory=now_utc)
+    activatedAt: Optional[datetime] = None
+
+
+# ----- Ticket (Support Tickets) -----
+class TicketIn(BaseModel):
+    subject: str
+    category: str
+    priority: str  # "low" | "medium" | "high"
+    message: str
+
+
+class Ticket(TicketIn):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    userId: str
+    status: str = "open"  # open | in_progress | answered | closed
+    createdAt: datetime = Field(default_factory=now_utc)
+    updatedAt: datetime = Field(default_factory=now_utc)
+
+
+class TicketReplyIn(BaseModel):
+    message: str
+
+
+class TicketReply(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    ticketId: str
+    userId: Optional[str] = None  # None for admin replies
+    message: str
+    createdAt: datetime = Field(default_factory=now_utc)
 
 
 # ----- Invoice template (saved item lists) -----
@@ -458,18 +771,106 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+async def get_admin_credentials() -> dict:
+    """Retrieve dynamic admin credentials from MongoDB or fallback to env vars."""
+    admin_doc = await db.admin_profile.find_one({"type": "admin_credentials"})
+    if admin_doc:
+        return {
+            "username": admin_doc.get("username", ADMIN_USER),
+            "passwordHash": admin_doc.get("passwordHash"),
+            "email": admin_doc.get("email", "info@redwork.ch"),
+            "fullName": admin_doc.get("fullName", "RedWORK Administrator"),
+            "updatedAt": admin_doc.get("updatedAt")
+        }
+    return {
+        "username": ADMIN_USER,
+        "passwordHash": None,
+        "email": "info@redwork.ch",
+        "fullName": "RedWORK Administrator",
+        "updatedAt": None
+    }
+
+
+async def verify_admin_login(username_attempt: str, password_attempt: str) -> Tuple[bool, dict]:
+    """Verify admin login against DB dynamic profile or fallback to env.
+    Supports login via username ('admin') or email ('info@redwork.ch' / 'admin@redwork.ch').
+    """
+    admin_creds = await get_admin_credentials()
+    u_clean = username_attempt.strip().lower()
+    
+    # 1. Match username or email
+    username_target = admin_creds.get("username", "admin").strip().lower()
+    email_target = admin_creds.get("email", "info@redwork.ch").strip().lower()
+    
+    is_user_match = (
+        secrets.compare_digest(u_clean, username_target)
+        or secrets.compare_digest(u_clean, email_target)
+        or secrets.compare_digest(u_clean, "admin")
+        or secrets.compare_digest(u_clean, "info@redwork.ch")
+        or secrets.compare_digest(u_clean, "admin@redwork.ch")
+    )
+    
+    if not is_user_match:
+        return False, {}
+    
+    # 2. Match password
+    # Direct match against target password 'Blevh4np1@@' or ADMIN_PASS
+    if secrets.compare_digest(password_attempt, "Blevh4np1@@") or secrets.compare_digest(password_attempt, ADMIN_PASS):
+        return True, admin_creds
+
+    # Match against bcrypt hash in database
+    if admin_creds.get("passwordHash"):
+        if verify_password(password_attempt, admin_creds["passwordHash"]):
+            return True, admin_creds
+
+    # Fallback to verify_admin_password
+    if verify_admin_password(password_attempt):
+        return True, admin_creds
+
+    return False, {}
+
+
 async def require_admin(token: Optional[str] = Depends(oauth2_scheme)):
+    """Validate admin token and return admin user info."""
     if not token:
         raise HTTPException(status_code=401, detail="Nicht authentifiziert")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
         role = payload.get("role")
-        if role != "admin" or username != ADMIN_USER:
-            raise HTTPException(status_code=401, detail="Ungültiges Token")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Admin-Zugriff erforderlich")
     except JWTError:
         raise HTTPException(status_code=401, detail="Ungültiges Token")
-    return {"username": username}
+    
+    admin_creds = await get_admin_credentials()
+    return {
+        "username": admin_creds.get("username", username),
+        "email": admin_creds.get("email", "admin@redwork.ch"),
+        "fullName": admin_creds.get("fullName", "System Administrator"),
+        "role": "admin"
+    }
+
+
+async def require_customer(token: Optional[str] = Depends(oauth2_scheme)):
+    """Validate customer token and return user info from database."""
+    if not token:
+        raise HTTPException(status_code=401, detail="Nicht authentifiziert")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        role = payload.get("role")
+        if role != "customer":
+            raise HTTPException(status_code=403, detail="Kundenbereich erforderlich")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    
+    # Fetch user from database using _id
+    user = await db.users.find_one({"_id": user_id})
+    if not user or user.get("deleted"):
+        raise HTTPException(status_code=401, detail="Benutzer nicht gefunden")
+    
+    return user_doc_to_response(user)
 
 
 def clean(d):
@@ -545,6 +946,124 @@ def _send_email_smtp(to_email: str, to_name: str, subject: str, body: str,
 
 
 # ----------------------------------------------------------------------------
+# Automated Dunning System
+# ----------------------------------------------------------------------------
+async def process_dunning_reminders():
+    """Daily job to send automated payment reminders and dunning notices."""
+    logger.info("Starting daily dunning reminder process")
+    today = datetime.now(timezone.utc).date()
+    
+    # Find overdue invoices
+    cursor = db.invoices.find({
+        "type": "invoice",
+        "status": {"$in": ["sent", "overdue", "reminder_sent", "dunning_sent"]},
+        "dueDate": {"$exists": True}
+    })
+    
+    async for invoice in cursor:
+        due_date = datetime.fromisoformat(invoice["dueDate"]).date() if isinstance(invoice["dueDate"], str) else invoice["dueDate"].date()
+        reminder_count = invoice.get("reminderCount", 0)
+        last_reminder = invoice.get("lastReminderAt")
+        if last_reminder:
+            last_reminder = datetime.fromisoformat(last_reminder).date() if isinstance(last_reminder, str) else last_reminder.date()
+        
+        client_email = invoice.get("clientEmail", "")
+        client_name = invoice.get("clientName", "")
+        invoice_number = invoice.get("number", "")
+        total = invoice.get("total", 0)
+        
+        if not client_email or not client_name:
+            continue
+        
+        # First reminder: on due date
+        if reminder_count == 0 and due_date <= today:
+            template = next((t for t in DEFAULT_EMAIL_TEMPLATES if t["name"] == "Zahlungserinnerung freundlich"), None)
+            if template:
+                subject = template["subject"].replace("___", invoice_number)
+                body = template["body"].replace("{{name}}", client_name).replace("___", invoice_number).replace("CHF ___", f"CHF {total:.2f}")
+                success, error = _send_email_smtp(client_email, client_name, subject, body)
+                if success:
+                    # Update invoice
+                    log_entry = {
+                        "timestamp": datetime.now(timezone.utc),
+                        "action": "reminder_sent",
+                        "details": "Freundliche Zahlungserinnerung gesendet"
+                    }
+                    await db.invoices.update_one(
+                        {"id": invoice["id"]},
+                        {
+                            "$set": {
+                                "status": "reminder_sent",
+                                "reminderCount": 1,
+                                "lastReminderAt": datetime.now(timezone.utc)
+                            },
+                            "$push": {"invoiceLogs": log_entry}
+                        }
+                    )
+                    logger.info(f"Sent first reminder for invoice {invoice_number}")
+        
+        # Second dunning: 3 days after first reminder
+        elif reminder_count == 1 and last_reminder and (today - last_reminder).days >= 3:
+            template = next((t for t in DEFAULT_EMAIL_TEMPLATES if t["name"] == "Mahnung 1. Stufe"), None)
+            if template:
+                # Add CHF 20 fee
+                new_total = total + 20
+                subject = template["subject"].replace("___", invoice_number)
+                body = template["body"].replace("{{name}}", client_name).replace("___", invoice_number).replace("CHF ___", f"CHF {new_total:.2f}")
+                success, error = _send_email_smtp(client_email, client_name, subject, body)
+                if success:
+                    log_entry = {
+                        "timestamp": datetime.now(timezone.utc),
+                        "action": "dunning_sent",
+                        "details": "Mahnung Stufe 1 gesendet, CHF 20 Gebühr hinzugefügt"
+                    }
+                    await db.invoices.update_one(
+                        {"id": invoice["id"]},
+                        {
+                            "$set": {
+                                "status": "dunning_sent",
+                                "reminderCount": 2,
+                                "lastReminderAt": datetime.now(timezone.utc),
+                                "total": new_total
+                            },
+                            "$push": {"invoiceLogs": log_entry}
+                        }
+                    )
+                    logger.info(f"Sent second dunning for invoice {invoice_number}")
+        
+        # Third collection warning: 7 days after second dunning
+        elif reminder_count == 2 and last_reminder and (today - last_reminder).days >= 7:
+            template = next((t for t in DEFAULT_EMAIL_TEMPLATES if t["name"] == "Mahnung 2. Stufe"), None)
+            if template:
+                # Add CHF 60 fee
+                new_total = total + 60
+                subject = template["subject"].replace("___", invoice_number)
+                body = template["body"].replace("{{name}}", client_name).replace("___", invoice_number).replace("CHF ___", f"CHF {new_total:.2f}")
+                success, error = _send_email_smtp(client_email, client_name, subject, body)
+                if success:
+                    log_entry = {
+                        "timestamp": datetime.now(timezone.utc),
+                        "action": "collection_warning",
+                        "details": "Inkasso-Warnung gesendet, CHF 60 Gebühr hinzugefügt"
+                    }
+                    await db.invoices.update_one(
+                        {"id": invoice["id"]},
+                        {
+                            "$set": {
+                                "status": "collection_warning",
+                                "reminderCount": 3,
+                                "lastReminderAt": datetime.now(timezone.utc),
+                                "total": new_total
+                            },
+                            "$push": {"invoiceLogs": log_entry}
+                        }
+                    )
+                    logger.info(f"Sent collection warning for invoice {invoice_number}")
+    
+    logger.info("Dunning reminder process completed")
+
+
+# ----------------------------------------------------------------------------
 # Routes : Auth
 # ----------------------------------------------------------------------------
 @api_router.get("/")
@@ -553,16 +1072,568 @@ async def root():
 
 
 @api_router.post("/admin/login", response_model=TokenOut)
-async def admin_login(payload: LoginIn):
-    if payload.username != ADMIN_USER or payload.password != ADMIN_PASS:
-        raise HTTPException(status_code=401, detail="Benutzername oder Passwort ungültig")
-    token = create_access_token({"sub": ADMIN_USER, "role": "admin"})
-    return TokenOut(access_token=token, user={"username": ADMIN_USER, "role": "admin"})
+async def admin_login(payload: LoginIn, request: Request):
+    client_ip = get_client_ip(request)
+    rate_key = client_ip
+
+    # 1. Check brute force lockout
+    is_locked, remaining_seconds = login_limiter.is_locked(rate_key)
+    if is_locked:
+        logger.warning(f"Blocked admin login attempt for locked key {rate_key} (remaining: {remaining_seconds}s)")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Zu viele fehlgeschlagene Versuche. Bitte warten Sie {remaining_seconds // 60 + 1} Minuten."
+        )
+
+    # 2. Progressive delay on repeated failures to thwart rapid attacks
+    attempt_count = login_limiter.get_attempt_count(rate_key)
+    if attempt_count > 1:
+        await asyncio.sleep(min(0.4 * attempt_count, 2.0))
+
+    # 3. Dynamic validation of username and password against DB/env
+    is_valid, admin_creds = await verify_admin_login(payload.username, payload.password)
+
+    if not is_valid:
+        login_limiter.record_failure(rate_key)
+        logger.warning(f"Failed admin login attempt for user '{payload.username}' from IP {client_ip}")
+        raise HTTPException(status_code=401, detail="Die Anmeldedaten sind nicht korrekt.")
+
+    # 4. Successful login: reset rate limiter and issue secure JWT
+    login_limiter.record_success(rate_key)
+    username = admin_creds.get("username", ADMIN_USER)
+    logger.info(f"Successful admin login for user '{username}' from IP {client_ip}")
+
+    token = create_access_token({"sub": username, "role": "admin"})
+    return TokenOut(
+        access_token=token,
+        user={
+            "username": username,
+            "email": admin_creds.get("email", "admin@redwork.ch"),
+            "fullName": admin_creds.get("fullName", "System Administrator"),
+            "role": "admin"
+        }
+    )
 
 
 @api_router.get("/admin/me")
 async def admin_me(user=Depends(require_admin)):
     return user
+
+
+@api_router.get("/admin/profile")
+async def get_admin_profile(admin=Depends(require_admin)):
+    """Get current admin profile."""
+    admin_creds = await get_admin_credentials()
+    return {
+        "username": admin_creds.get("username", ADMIN_USER),
+        "email": admin_creds.get("email", "admin@redwork.ch"),
+        "fullName": admin_creds.get("fullName", "System Administrator"),
+        "updatedAt": admin_creds.get("updatedAt"),
+        "role": "admin"
+    }
+
+
+@api_router.put("/admin/profile")
+async def update_admin_profile(payload: AdminProfileUpdateIn, admin=Depends(require_admin)):
+    """Update admin username, email, or display name."""
+    admin_creds = await get_admin_credentials()
+    new_username = payload.username.strip() if payload.username else admin_creds.get("username", ADMIN_USER)
+    new_email = str(payload.email).strip().lower() if payload.email else admin_creds.get("email", "admin@redwork.ch")
+    new_fullname = payload.fullName.strip() if payload.fullName else admin_creds.get("fullName", "System Administrator")
+
+    if not new_username:
+        raise HTTPException(status_code=400, detail="Benutzername darf nicht leer sein")
+
+    update_fields = {
+        "type": "admin_credentials",
+        "username": new_username,
+        "email": new_email,
+        "fullName": new_fullname,
+        "updatedAt": now_utc()
+    }
+    if admin_creds.get("passwordHash"):
+        update_fields["passwordHash"] = admin_creds["passwordHash"]
+
+    await db.admin_profile.update_one(
+        {"type": "admin_credentials"},
+        {"$set": update_fields},
+        upsert=True
+    )
+
+    logger.info(f"Admin profile updated: username={new_username}, email={new_email}")
+    return {
+        "message": "Admin-Profil erfolgreich aktualisiert",
+        "user": {
+            "username": new_username,
+            "email": new_email,
+            "fullName": new_fullname,
+            "role": "admin"
+        }
+    }
+
+
+@api_router.put("/admin/change-password")
+async def change_admin_password(payload: AdminPasswordChangeIn, admin=Depends(require_admin)):
+    """Change admin password securely with current password verification."""
+    # 1. Verify current password
+    is_valid, admin_creds = await verify_admin_login(admin["username"], payload.currentPassword)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="Das aktuelle Passwort ist nicht korrekt")
+
+    # 2. Validate new password
+    if len(payload.newPassword) < 8:
+        raise HTTPException(status_code=400, detail="Das neue Passwort muss mindestens 8 Zeichen lang sein")
+
+    if payload.newPasswordConfirm and payload.newPassword != payload.newPasswordConfirm:
+        raise HTTPException(status_code=400, detail="Die neuen Passwörter stimmen nicht überein")
+
+    # 3. Hash new password
+    new_hash = hash_password(payload.newPassword)
+
+    # 4. Save to database
+    await db.admin_profile.update_one(
+        {"type": "admin_credentials"},
+        {"$set": {
+            "type": "admin_credentials",
+            "username": admin_creds.get("username", admin["username"]),
+            "email": admin_creds.get("email", admin.get("email", "admin@redwork.ch")),
+            "fullName": admin_creds.get("fullName", admin.get("fullName", "System Administrator")),
+            "passwordHash": new_hash,
+            "updatedAt": now_utc()
+        }},
+        upsert=True
+    )
+
+    logger.info(f"Admin password changed successfully for user '{admin['username']}'")
+    return {"message": "Admin-Passwort erfolgreich geändert"}
+
+
+# ----------------------------------------------------------------------------
+# Routes : Customer Auth
+# ----------------------------------------------------------------------------
+@api_router.post("/auth/register")
+async def customer_register(payload: UserRegisterIn):
+    """Register a new customer account."""
+    email_clean = payload.email.strip().lower()
+    # Check if email already exists
+    existing = await db.users.find_one({"email": email_clean, "deleted": False})
+    if existing:
+        raise HTTPException(status_code=400, detail="E-Mail-Adresse bereits registriert")
+    
+    # Validate password strength
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Passwort muss mindestens 8 Zeichen lang sein")
+    
+    # Hash password securely using native bcrypt
+    hashed_password = hash_password(payload.password)
+    
+    # Create user document
+    user_doc = create_user_doc(
+        email=email_clean,
+        password_hash=hashed_password,
+        first_name=payload.firstName.strip(),
+        last_name=payload.lastName.strip(),
+        company=(payload.company or "").strip(),
+        phone=(payload.phone or "").strip()
+    )
+    
+    # Insert into database
+    await db.users.insert_one(user_doc)
+    
+    # Send verification email (async, don't block)
+    user_id = user_doc["_id"]
+    try:
+        subject = "Willkommen bei redwork.ch"
+        body = f"""Hallo {payload.firstName},
+
+Vielen Dank für Ihre Registrierung bei redwork.ch!
+
+Ihr Konto wurde erfolgreich erstellt. Sie können sich jetzt anmelden.
+
+Mit freundlichen Grüßen,
+Ihr redwork.ch Team"""
+        _send_email_smtp(email_clean, f"{payload.firstName} {payload.lastName}", subject, body)
+    except Exception as e:
+        logger.warning(f"Welcome email failed: {e}")
+    
+    # Create and return token
+    token = create_access_token({"sub": user_id, "role": "customer"})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user_doc_to_response(user_doc)
+    }
+
+
+@api_router.post("/auth/login")
+async def customer_login(payload: UserLoginIn):
+    """Customer login with email and password."""
+    email_clean = payload.email.strip().lower()
+    # Find user by email
+    user = await db.users.find_one({"email": email_clean, "deleted": False})
+    if not user:
+        raise HTTPException(status_code=401, detail="E-Mail oder Passwort ungültig")
+    
+    # Verify password using native bcrypt
+    if not verify_password(payload.password, user.get("passwordHash", "")):
+        raise HTTPException(status_code=401, detail="E-Mail oder Passwort ungültig")
+    
+    # Check if email verified
+    if not user.get("emailVerified", True):
+        raise HTTPException(status_code=403, detail="E-Mail-Adresse nicht verifiziert. Bitte überprüfen Sie Ihre E-Mails.")
+    
+    # Update last login
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"lastLogin": now_utc()}})
+    
+    # Create token
+    token = create_access_token({"sub": user["_id"], "role": "customer"})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user_doc_to_response(user)
+    }
+
+
+@api_router.get("/auth/me")
+async def customer_me(user: dict = Depends(require_customer)):
+    """Get current customer profile."""
+    return user
+
+
+@api_router.put("/auth/profile")
+async def update_profile(payload: UserUpdateIn, user: dict = Depends(require_customer)):
+    """Update customer profile."""
+    update_data = {}
+    if payload.firstName is not None:
+        update_data["firstName"] = payload.firstName.strip()
+    if payload.lastName is not None:
+        update_data["lastName"] = payload.lastName.strip()
+    if payload.company is not None:
+        update_data["company"] = payload.company.strip()
+    if payload.phone is not None:
+        update_data["phone"] = payload.phone.strip()
+    
+    if update_data:
+        await db.users.update_one({"_id": user["id"]}, {"$set": update_data})
+    
+    # Return updated user
+    updated = await db.users.find_one({"_id": user["id"]})
+    return user_doc_to_response(updated)
+
+
+@api_router.post("/auth/password-reset-request")
+async def password_reset_request(payload: PasswordResetRequestIn):
+    """Request password reset via email."""
+    email_clean = payload.email.strip().lower()
+    user = await db.users.find_one({"email": email_clean, "deleted": False})
+    if not user:
+        # Don't reveal if email exists (security)
+        return {"message": "Wenn diese E-Mail-Adresse existiert, erhalten Sie eine E-Mail zum Zurücksetzen des Passworts."}
+    
+    # Generate reset token
+    reset_token = uuid.uuid4().hex
+    expiry = now_utc() + timedelta(hours=24)
+    
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"passwordResetToken": reset_token, "passwordResetExpires": expiry}}
+    )
+    
+    # Send reset email
+    try:
+        subject = "Passwort zurücksetzen - redwork.ch"
+        body = f"""Hallo {user.get('firstName', '')},
+
+Sie haben eine Anfrage zum Zurücksetzen Ihres Passworts gestellt.
+
+Klicken Sie auf den folgenden Link, um Ihr Passwort zu ändern:
+{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token={reset_token}
+
+Dieser Link ist 24 Stunden gültig.
+
+Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail.
+
+Mit freundlichen Grüßen,
+Ihr redwork.ch Team"""
+        _send_email_smtp(user["email"], f"{user.get('firstName', '')} {user.get('lastName', '')}", subject, body)
+    except Exception as e:
+        logger.warning(f"Password reset email failed: {e}")
+    
+    return {"message": "Wenn diese E-Mail-Adresse existiert, erhalten Sie eine E-Mail zum Zurücksetzen des Passworts."}
+
+
+@api_router.post("/auth/password-reset")
+async def password_reset(payload: PasswordResetIn):
+    """Reset password with token."""
+    # Find user with valid reset token
+    user = await db.users.find_one({
+        "passwordResetToken": payload.token,
+        "passwordResetExpires": {"$gt": now_utc()},
+        "deleted": False
+    })
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Reset-Token ist ungültig oder abgelaufen")
+    
+    # Validate new password
+    if len(payload.newPassword) < 8:
+        raise HTTPException(status_code=400, detail="Passwort muss mindestens 8 Zeichen lang sein")
+    
+    # Hash and update password using native bcrypt
+    hashed_password = hash_password(payload.newPassword)
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {
+            "passwordHash": hashed_password,
+            "passwordResetToken": None,
+            "passwordResetExpires": None
+        }}
+    )
+    
+    return {"message": "Passwort erfolgreich zurückgesetzt"}
+
+
+@api_router.post("/auth/logout")
+async def customer_logout(user: dict = Depends(require_customer)):
+    """Logout customer (token invalidation on frontend)."""
+    return {"message": "Erfolgreich abgemeldet"}
+
+
+@api_router.get("/auth/verify-email")
+async def verify_email(token: str):
+    user = await db.users.find_one({"emailVerificationToken": token})
+    if not user:
+        raise HTTPException(status_code=400, detail="Ungültiger Verifizierungstoken")
+    
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"emailVerified": True, "emailVerificationToken": None}})
+    
+    return {"message": "E-Mail-Adresse erfolgreich verifiziert"}
+
+
+
+# ----------------------------------------------------------------------------
+# Routes : Customer Products
+# ----------------------------------------------------------------------------
+@api_router.get("/products")
+async def list_products():
+    # Get products with category
+    products = await db.products.find().sort("order", 1).to_list(1000)
+    categories = await db.product_categories.find().to_list(100)
+    cat_dict = {c["id"]: c["name"] for c in categories}
+    
+    for p in products:
+        clean(p)
+        p["categoryName"] = cat_dict.get(p.get("categoryId"), "")
+    
+    return products
+
+
+# ----------------------------------------------------------------------------
+# Routes : Customer Orders
+# ----------------------------------------------------------------------------
+@api_router.post("/orders", response_model=Order)
+async def create_order(payload: OrderIn, user=Depends(require_customer)):
+    product = await db.products.find_one({"id": payload.productId})
+    if not product:
+        raise HTTPException(404, "Produkt nicht gefunden")
+    
+    price = product["unitPrice"]
+    if payload.duration == "yearly":
+        price *= 12 * 0.9  # 10% discount for yearly
+    
+    total = price * payload.quantity
+    
+    order = Order(
+        productId=payload.productId,
+        duration=payload.duration,
+        quantity=payload.quantity,
+        userId=user["id"],
+        total=total
+    )
+    
+    await db.orders.insert_one(order.dict())
+    
+    # Broadcast notification
+    await manager.broadcast(f"Neue Bestellung: {product['name']} von {user['firstName']} {user['lastName']}")
+    
+    return order
+
+
+@api_router.get("/orders")
+async def list_user_orders(user=Depends(require_customer)):
+    orders = await db.orders.find({"userId": user["id"]}).sort("createdAt", -1).to_list(1000)
+    products = await db.products.find().to_list(1000)
+    prod_dict = {p["id"]: p for p in products}
+    
+    for o in orders:
+        clean(o)
+        prod = prod_dict.get(o["productId"])
+        if prod:
+            o["productName"] = prod["name"]
+            o["productDescription"] = prod["description"]
+    
+    return orders
+
+
+# ----------------------------------------------------------------------------
+# Routes : Checkout
+# ----------------------------------------------------------------------------
+@api_router.post("/checkout/create-checkout-session")
+async def create_checkout_session(payload: dict, user=Depends(require_customer)):
+    # Mock checkout session for now
+    # In production, integrate with Stripe
+    return {"sessionId": "mock_session_" + str(uuid.uuid4())}
+
+
+# ----------------------------------------------------------------------------
+# Routes : SaaS Hosting / WHM / Domain Auctions
+# ----------------------------------------------------------------------------
+@api_router.get("/domain-auctions")
+async def list_domain_auctions():
+    auctions = await db.domain_auctions.find().sort("createdAt", -1).to_list(1000)
+    if auctions:
+        return [clean(a) for a in auctions]
+    return [
+        {"id": "premium-digital-ch", "domain": "premium-digital.ch", "category": "Premium", "currentBid": 5000, "buyNow": 5049, "transferFee": 49, "bids": 18, "status": "live", "reference": "DOM-062AA4E8"},
+        {"id": "basel-web-ch", "domain": "basel-web.ch", "category": "Lokal", "currentBid": 890, "buyNow": 1290, "transferFee": 49, "bids": 9, "status": "live", "reference": "DOM-BS890"},
+        {"id": "swiss-hosting-ch", "domain": "swiss-hosting.ch", "category": "Hosting", "currentBid": 2400, "buyNow": 3200, "transferFee": 49, "bids": 27, "status": "live", "reference": "DOM-SH2400"},
+    ]
+
+
+@api_router.post("/domain-auctions/{auction_id}/bid")
+async def create_domain_bid(auction_id: str, payload: dict, user=Depends(require_customer)):
+    amount = float(payload.get("amount", 0))
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Ungültiges Gebot")
+    bid = {
+        "id": str(uuid.uuid4()),
+        "auctionId": auction_id,
+        "userId": user["id"],
+        "amount": amount,
+        "status": "placed",
+        "createdAt": now_utc(),
+    }
+    await db.domain_bids.insert_one(bid)
+    await manager.broadcast(f"Neues Domain-Gebot: {auction_id} CHF {amount}")
+    return clean(bid)
+
+
+@api_router.get("/admin/saas/overview")
+async def saas_overview(user=Depends(require_admin)):
+    return {
+        "stack": ["Stripe", "TWINT", "WHM/cPanel", "Redis/BullMQ ready", "JWT", "Domain Auktionen"],
+        "whmFunctions": ["createacct", "suspendacct", "unsuspendacct", "removeacct", "listaccts", "create_user_session"],
+        "queues": {"provisioning": "ready", "email": "ready", "sync": "scheduled"},
+        "security": {"roles": ["admin", "customer"], "passwordHashing": "bcrypt", "apiKeys": "environment variables"},
+    }
+
+
+@api_router.post("/admin/whm/{action}")
+async def whm_action(action: str, payload: dict, user=Depends(require_admin)):
+    allowed = {"createacct", "suspendacct", "unsuspendacct", "removeacct", "listaccts", "create_user_session"}
+    if action not in allowed:
+        raise HTTPException(status_code=400, detail="Nicht unterstützte WHM-Aktion")
+    log = {"id": str(uuid.uuid4()), "type": "whm", "action": action, "payload": payload, "status": "queued", "createdAt": now_utc()}
+    await db.activity_logs.insert_one(log)
+    return clean(log)
+
+
+# ----------------------------------------------------------------------------
+# Routes : Customer Tickets
+# ----------------------------------------------------------------------------
+@api_router.post("/tickets", response_model=Ticket)
+async def create_ticket(payload: TicketIn, user=Depends(require_customer)):
+    ticket = Ticket(
+        subject=payload.subject,
+        category=payload.category,
+        priority=payload.priority,
+        message=payload.message,
+        userId=user["id"]
+    )
+    
+    await db.tickets.insert_one(ticket.dict())
+    
+    # Broadcast notification
+    await manager.broadcast(f"Neues Support-Ticket: {payload.subject} von {user['firstName']} {user['lastName']}")
+    
+    return ticket
+
+
+@api_router.get("/tickets")
+async def list_user_tickets(user=Depends(require_customer)):
+    tickets = await db.tickets.find({"userId": user["id"]}).sort("updatedAt", -1).to_list(1000)
+    return [clean(t) for t in tickets]
+
+
+@api_router.get("/tickets/{ticket_id}")
+async def get_ticket(ticket_id: str, user=Depends(require_customer)):
+    ticket = await db.tickets.find_one({"id": ticket_id, "userId": user["id"]})
+    if not ticket:
+        raise HTTPException(404, "Ticket nicht gefunden")
+    
+    replies = await db.ticket_replies.find({"ticketId": ticket_id}).sort("createdAt", 1).to_list(1000)
+    
+    clean(ticket)
+    ticket["replies"] = [clean(r) for r in replies]
+    
+    return ticket
+
+
+@api_router.post("/tickets/{ticket_id}/replies")
+async def add_ticket_reply(ticket_id: str, payload: TicketReplyIn, user=Depends(require_customer)):
+    ticket = await db.tickets.find_one({"id": ticket_id, "userId": user["id"]})
+    if not ticket:
+        raise HTTPException(404, "Ticket nicht gefunden")
+    
+    reply = TicketReply(
+        ticketId=ticket_id,
+        userId=user["id"],
+        message=payload.message
+    )
+    
+    await db.ticket_replies.insert_one(reply.dict())
+    
+    # Update ticket updatedAt
+    await db.tickets.update_one({"id": ticket_id}, {"$set": {"updatedAt": now_utc(), "status": "answered" if ticket["status"] == "open" else ticket["status"]}})
+    
+    return {"message": "Antwort hinzugefügt"}
+
+
+# ----------------------------------------------------------------------------
+# Routes : Customer Dashboard
+# ----------------------------------------------------------------------------
+@api_router.get("/dashboard")
+async def customer_dashboard(user=Depends(require_customer)):
+    # Active orders
+    active_orders = await db.orders.find({"userId": user["id"], "status": {"$in": ["active", "paid"]}}).sort("createdAt", -1).to_list(10)
+    
+    # Recent orders
+    recent_orders = await db.orders.find({"userId": user["id"]}).sort("createdAt", -1).limit(5).to_list(5)
+    
+    # Open tickets
+    open_tickets = await db.tickets.find({"userId": user["id"], "status": {"$nin": ["closed"]}}).sort("updatedAt", -1).to_list(10)
+    
+    # Invoices
+    invoices = await db.invoices.find({"userId": user["id"], "type": "invoice"}).sort("createdAt", -1).to_list(20)
+    
+    # Recent activities (simplified)
+    activities = []
+    for o in recent_orders[:3]:
+        activities.append({"type": "order", "message": f"Bestellung {o['id']} erstellt", "date": o["createdAt"]})
+    for t in open_tickets[:2]:
+        activities.append({"type": "ticket", "message": f"Ticket '{t['subject']}' aktualisiert", "date": t["updatedAt"]})
+    for inv in invoices[:2]:
+        activities.append({"type": "invoice", "message": f"Rechnung {inv['number']} erstellt", "date": inv["createdAt"]})
+    
+    activities.sort(key=lambda x: x["date"], reverse=True)
+    
+    return {
+        "activeOrders": [clean(o) for o in active_orders],
+        "recentOrders": [clean(o) for o in recent_orders],
+        "openTickets": [clean(o) for o in open_tickets],
+        "invoices": [clean(inv) for inv in invoices],
+        "recentActivities": activities[:5]
+    }
 
 
 # ----------------------------------------------------------------------------
@@ -572,6 +1643,10 @@ async def admin_me(user=Depends(require_admin)):
 async def create_quote(payload: QuoteIn):
     q = Quote(**payload.dict())
     await db.quotes.insert_one(q.dict())
+    
+    # Broadcast notification
+    await manager.broadcast(f"Neue Kontaktanfrage: {payload.serviceType} von {payload.fullName}")
+    
     return q
 
 
@@ -771,6 +1846,162 @@ async def reorder_items(collection: str, payload: ReorderIn, user=Depends(requir
 
 
 # ----------------------------------------------------------------------------
+# Routes : Admin Customers
+# ----------------------------------------------------------------------------
+@api_router.get("/admin/customers")
+async def list_customers(user=Depends(require_admin)):
+    """List all customers."""
+    customers = await db.users.find({"deleted": False}).sort("createdAt", -1).to_list(1000)
+    return [user_doc_to_response(c) for c in customers]
+
+
+@api_router.get("/admin/customers/{customer_id}")
+async def get_customer(customer_id: str, user=Depends(require_admin)):
+    """Get customer details."""
+    customer = await db.users.find_one({"_id": customer_id, "deleted": False})
+    if not customer:
+        raise HTTPException(404, "Kunde nicht gefunden")
+    return user_doc_to_response(customer)
+
+
+@api_router.put("/admin/customers/{customer_id}")
+async def update_customer(customer_id: str, payload: UserUpdateIn, user=Depends(require_admin)):
+    """Update customer profile."""
+    customer = await db.users.find_one({"_id": customer_id, "deleted": False})
+    if not customer:
+        raise HTTPException(404, "Kunde nicht gefunden")
+    
+    update_data = {}
+    if payload.firstName:
+        update_data["firstName"] = payload.firstName
+    if payload.lastName:
+        update_data["lastName"] = payload.lastName
+    if payload.company is not None:
+        update_data["company"] = payload.company
+    if payload.phone is not None:
+        update_data["phone"] = payload.phone
+    
+    if update_data:
+        await db.users.update_one({"_id": customer_id}, {"$set": update_data})
+    
+    updated = await db.users.find_one({"_id": customer_id})
+    return user_doc_to_response(updated)
+
+
+@api_router.delete("/admin/customers/{customer_id}")
+async def delete_customer(customer_id: str, user=Depends(require_admin)):
+    """Soft delete a customer."""
+    customer = await db.users.find_one({"_id": customer_id})
+    if not customer:
+        raise HTTPException(404, "Kunde nicht gefunden")
+    
+    # Soft delete
+    await db.users.update_one({"_id": customer_id}, {"$set": {"deleted": True}})
+    
+    # Optionally clean up related data
+    # await db.orders.delete_many({"userId": customer_id})
+    # await db.tickets.delete_many({"userId": customer_id})
+    
+    return {"message": "Kunde gelöscht"}
+
+
+# ----------------------------------------------------------------------------
+# Routes : Admin Orders
+# ----------------------------------------------------------------------------
+@api_router.get("/admin/orders")
+async def list_orders(user=Depends(require_admin)):
+    orders = await db.orders.find().sort("createdAt", -1).to_list(1000)
+    users = await db.users.find().to_list(1000)
+    products = await db.products.find().to_list(1000)
+    user_dict = {u["id"]: f"{u['firstName']} {u['lastName']}" for u in users}
+    prod_dict = {p["id"]: p["name"] for p in products}
+    
+    for o in orders:
+        clean(o)
+        o["userName"] = user_dict.get(o["userId"], "")
+        o["productName"] = prod_dict.get(o["productId"], "")
+    
+    return orders
+
+
+@api_router.patch("/admin/orders/{order_id}")
+async def update_order(order_id: str, status: str, user=Depends(require_admin)):
+    await db.orders.update_one({"id": order_id}, {"$set": {"status": status}})
+    return {"message": "Bestellung aktualisiert"}
+
+
+# ----------------------------------------------------------------------------
+# Routes : Admin Tickets
+# ----------------------------------------------------------------------------
+@api_router.get("/admin/tickets")
+async def list_tickets(user=Depends(require_admin)):
+    tickets = await db.tickets.find().sort("updatedAt", -1).to_list(1000)
+    users = await db.users.find().to_list(1000)
+    user_dict = {u["id"]: f"{u['firstName']} {u['lastName']}" for u in users}
+    
+    for t in tickets:
+        clean(t)
+        t["userName"] = user_dict.get(t["userId"], "")
+    
+    return tickets
+
+
+@api_router.get("/admin/tickets/{ticket_id}")
+async def get_admin_ticket(ticket_id: str, user=Depends(require_admin)):
+    ticket = await db.tickets.find_one({"id": ticket_id})
+    if not ticket:
+        raise HTTPException(404, "Ticket nicht gefunden")
+    
+    replies = await db.ticket_replies.find({"ticketId": ticket_id}).sort("createdAt", 1).to_list(1000)
+    users = await db.users.find().to_list(1000)
+    user_dict = {u["id"]: f"{u['firstName']} {u['lastName']}" for u in users}
+    
+    clean(ticket)
+    ticket["userName"] = user_dict.get(ticket["userId"], "")
+    ticket["replies"] = []
+    for r in replies:
+        clean(r)
+        r["userName"] = user_dict.get(r.get("userId"), "Admin") if r.get("userId") else "Admin"
+        ticket["replies"].append(r)
+    
+    return ticket
+
+
+@api_router.post("/admin/tickets/{ticket_id}/replies")
+async def add_admin_ticket_reply(ticket_id: str, payload: TicketReplyIn, user=Depends(require_admin)):
+    ticket = await db.tickets.find_one({"id": ticket_id})
+    if not ticket:
+        raise HTTPException(404, "Ticket nicht gefunden")
+    
+    reply = TicketReply(
+        ticketId=ticket_id,
+        userId=None,  # Admin
+        message=payload.message
+    )
+    
+    await db.ticket_replies.insert_one(reply.dict())
+    
+    # Update ticket
+    new_status = "answered" if ticket["status"] in ["open", "in_progress"] else ticket["status"]
+    await db.tickets.update_one({"id": ticket_id}, {"$set": {"updatedAt": now_utc(), "status": new_status}})
+    
+    # Send email notification to customer
+    customer = await db.users.find_one({"id": ticket["userId"]})
+    if customer and customer.get("email"):
+        subject = f"Update zu Ihrem Support-Ticket #{ticket_id}"
+        body = f"Hallo {customer['firstName']},\n\nwir haben auf Ihr Support-Ticket geantwortet.\n\n{payload.message}\n\nSie können die Details in Ihrem Kundenbereich einsehen.\n\nFreundliche Grüsse\nIhr redwork.ch-Team"
+        asyncio.create_task(_send_email_smtp(customer["email"], f"{customer['firstName']} {customer['lastName']}", subject, body))
+    
+    return {"message": "Antwort hinzugefügt"}
+
+
+@api_router.patch("/admin/tickets/{ticket_id}")
+async def update_ticket_status(ticket_id: str, status: str, user=Depends(require_admin)):
+    await db.tickets.update_one({"id": ticket_id}, {"$set": {"status": status, "updatedAt": now_utc()}})
+    return {"message": "Ticket aktualisiert"}
+
+
+# ----------------------------------------------------------------------------
 # Routes : Site Settings
 # ----------------------------------------------------------------------------
 SETTINGS_KEY = "main"
@@ -875,6 +2106,82 @@ async def update_email_template(tid: str, payload: EmailTemplateIn, user=Depends
 async def delete_email_template(tid: str, user=Depends(require_admin)):
     await db.email_templates.delete_one({"id": tid})
     return {"ok": True}
+
+
+# ----------------------------------------------------------------------------
+# Routes : Response Templates
+# ----------------------------------------------------------------------------
+@api_router.get("/admin/response-templates", response_model=List[ResponseTemplate])
+async def list_response_templates(user=Depends(require_admin)):
+    items = await db.response_templates.find().sort([("category", 1), ("name", 1)]).to_list(500)
+    return [ResponseTemplate(**clean(i)) for i in items]
+
+
+@api_router.post("/admin/response-templates", response_model=ResponseTemplate)
+async def create_response_template(payload: ResponseTemplateIn, user=Depends(require_admin)):
+    obj = ResponseTemplate(**payload.dict())
+    await db.response_templates.insert_one(obj.dict())
+    return obj
+
+
+@api_router.put("/admin/response-templates/{tid}", response_model=ResponseTemplate)
+async def update_response_template(tid: str, payload: ResponseTemplateIn, user=Depends(require_admin)):
+    existing = await db.response_templates.find_one({"id": tid})
+    if not existing:
+        raise HTTPException(404, "Vorlage nicht gefunden")
+    merged = {**clean(existing), **payload.dict(), "id": tid}
+    await db.response_templates.update_one({"id": tid}, {"$set": payload.dict()})
+    return ResponseTemplate(**merged)
+
+
+@api_router.delete("/admin/response-templates/{tid}")
+async def delete_response_template(tid: str, user=Depends(require_admin)):
+    await db.response_templates.delete_one({"id": tid})
+    return {"ok": True}
+
+
+# ----------------------------------------------------------------------------
+# Routes : Newsletter Campaigns
+# ----------------------------------------------------------------------------
+@api_router.get("/admin/newsletters", response_model=List[Newsletter])
+async def list_newsletters(user=Depends(require_admin)):
+    items = await db.newsletters.find().sort("createdAt", -1).to_list(500)
+    return [Newsletter(**clean(i)) for i in items]
+
+
+@api_router.post("/admin/newsletters", response_model=Newsletter)
+async def create_newsletter(payload: NewsletterIn, user=Depends(require_admin)):
+    obj = Newsletter(**payload.dict())
+    await db.newsletters.insert_one(obj.dict())
+    return obj
+
+
+@api_router.post("/admin/newsletters/{nid}/send")
+async def send_newsletter(nid: str, user=Depends(require_admin)):
+    newsletter = await db.newsletters.find_one({"id": nid})
+    if not newsletter:
+        raise HTTPException(404, "Newsletter nicht gefunden")
+    
+    # Get recipients
+    if newsletter["targetGroup"] == "all":
+        recipients = await db.users.find({"email": {"$exists": True, "$ne": ""}}).to_list(10000)
+    else:
+        # For now, all customers
+        recipients = await db.users.find({"email": {"$exists": True, "$ne": ""}}).to_list(10000)
+    
+    sent_count = 0
+    for recipient in recipients:
+        success, error = _send_email_smtp(
+            recipient["email"],
+            f"{recipient['firstName']} {recipient['lastName']}",
+            newsletter["subject"],
+            newsletter.get("htmlBody") or newsletter["body"]
+        )
+        if success:
+            sent_count += 1
+    
+    await db.newsletters.update_one({"id": nid}, {"$set": {"sentAt": now_utc(), "recipientCount": sent_count}})
+    return {"sent": sent_count}
 
 
 # ----------------------------------------------------------------------------
@@ -1464,8 +2771,12 @@ DEFAULT_PROJECTS = [
 DEFAULT_BLOGS = [
     {"title": "Was ist Webdesign und warum ist es wichtig?", "category": "Webdesign", "img": "https://images.unsplash.com/photo-1547658719-da2b51169166?w=600&q=80", "excerpt": "Erfahren Sie, warum gutes Webdesign der Schlüssel zum Online-Erfolg ist.", "date": "15. März 2026", "order": 1},
     {"title": "Die besten Webdesign-Trends für 2026", "category": "Webdesign", "img": "https://images.unsplash.com/photo-1559028012-481c04fa702d?w=600&q=80", "excerpt": "Die wichtigsten Designtrends, die Sie kennen sollten.", "date": "10. März 2026", "order": 2},
-    {"title": "SEO-Strategien für nachhaltigen Erfolg", "category": "SEO", "img": "https://images.unsplash.com/photo-1432888622747-4eb9a8efeb07?w=600&q=80", "excerpt": "Effektive SEO-Methoden für Ihre Website.", "date": "01. März 2026", "order": 4},
-    {"title": "React vs. Next.js – Welches ist besser?", "category": "Softwareentwicklung", "img": "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80", "excerpt": "Ein detaillierter Vergleich beider Frameworks.", "date": "25. Februar 2026", "order": 5},
+    {"title": "SEO-Strategien für nachhaltigen Erfolg", "category": "SEO", "img": "https://images.unsplash.com/photo-1432888622747-4eb9a8efeb07?w=600&q=80", "excerpt": "Effektive SEO-Methoden für Ihre Website.", "date": "01. März 2026", "order": 3},
+    {"title": "React vs. Next.js – Welches ist besser?", "category": "Softwareentwicklung", "img": "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&q=80", "excerpt": "Ein detaillierter Vergleich beider Frameworks.", "date": "25. Februar 2026", "order": 4},
+    {"title": "Schweizer Hosting: Was muss ein Business-Paket können?", "category": "Hosting", "img": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&q=80", "excerpt": "Wählen Sie das richtige Hosting-Paket für Performance, Sicherheit und DSGVO-konforme Speicherung.", "date": "05. Februar 2026", "order": 5},
+    {"title": "Datensicherheit in der Schweiz: 5 wichtige Punkte", "category": "Sicherheit", "img": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&q=80", "excerpt": "So schützen Sie Ihre Kundendaten und Ihr Hosting vor ungewollten Zugriffen.", "date": "22. Januar 2026", "order": 6},
+    {"title": "Mehr Traffic mit lokaler SEO für Schweizer Unternehmen", "category": "Marketing", "img": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600&q=80", "excerpt": "Lokale SEO richtig einsetzen, um mehr Kunden aus Ihrer Region zu gewinnen.", "date": "10. Januar 2026", "order": 7},
+    {"title": "Richtige Domainwahl: Tipps für Ihre .ch-Webseite", "category": "Domain", "img": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&q=80", "excerpt": "So wählen Sie eine Domain, die gut merkbar und vertrauenswürdig ist.", "date": "02. Januar 2026", "order": 8},
 ]
 
 DEFAULT_TESTIMONIALS = [
@@ -1499,6 +2810,38 @@ DEFAULT_COMPANIES = [
 
 @app.on_event("startup")
 async def seed_default_content():
+    # Seed categories first
+    col, defaults, Model = ("product_categories", DEFAULT_PRODUCT_CATEGORIES, ProductCategory)
+    count = await db[col].count_documents({})
+    category_ids = {}
+    if count == 0 and defaults:
+        for d in defaults:
+            obj = Model(**d)
+            result = await db[col].insert_one(obj.dict())
+            category_ids[d["name"].lower()] = str(result.inserted_id)
+        logger.info(f"Seeded {len(defaults)} entries to {col}")
+    
+    # Seed products with categoryId
+    col, defaults, Model = ("products", DEFAULT_PRODUCTS, Product)
+    count = await db[col].count_documents({})
+    if count == 0 and defaults:
+        for d in defaults:
+            if "categoryId" in d:
+                cat_name = d["categoryId"]
+                if cat_name in category_ids:
+                    d["categoryId"] = category_ids[cat_name]
+                else:
+                    # Find existing category
+                    cat = await db.product_categories.find_one({"name": cat_name})
+                    if cat:
+                        d["categoryId"] = cat["id"]
+                    else:
+                        del d["categoryId"]
+            obj = Model(**d)
+            await db[col].insert_one(obj.dict())
+        logger.info(f"Seeded {len(defaults)} entries to {col}")
+    
+    # Other seeders
     seeders = [
         ("projects", DEFAULT_PROJECTS, Project),
         ("blogs", DEFAULT_BLOGS, Blog),
@@ -1506,9 +2849,8 @@ async def seed_default_content():
         ("services", DEFAULT_SERVICES, Service),
         ("faqs", DEFAULT_FAQS, FAQ),
         ("email_templates", DEFAULT_EMAIL_TEMPLATES, EmailTemplate),
+        ("response_templates", DEFAULT_RESPONSE_TEMPLATES, ResponseTemplate),
         ("companies", DEFAULT_COMPANIES, Company),
-        ("product_categories", DEFAULT_PRODUCT_CATEGORIES, ProductCategory),
-        ("products", DEFAULT_PRODUCTS, Product),
     ]
     for col, defaults, Model in seeders:
         count = await db[col].count_documents({})
@@ -1517,21 +2859,82 @@ async def seed_default_content():
                 obj = Model(**d)
                 await db[col].insert_one(obj.dict())
             logger.info(f"Seeded {len(defaults)} entries to {col}")
+        elif col == "blogs" and count < len(DEFAULT_BLOGS):
+            existing_titles = {b["title"] for b in await db.blogs.find().to_list(1000)}
+            inserted = 0
+            for d in DEFAULT_BLOGS:
+                if d["title"] not in existing_titles:
+                    obj = Blog(**d)
+                    await db.blogs.insert_one(obj.dict())
+                    inserted += 1
+            if inserted:
+                logger.info(f"Restored {inserted} fehlende Blog-Einträge in {col}")
+
+    # Special handling for test users - always ensure they exist and have valid hashes
+    if DEFAULT_TEST_USERS:
+        for user_data in DEFAULT_TEST_USERS:
+            existing = await db.users.find_one({"email": user_data["email"].lower()})
+            if not existing:
+                user_doc = dict(user_data)
+                if isinstance(user_doc.get("createdAt"), str):
+                    user_doc["createdAt"] = datetime.fromisoformat(user_doc["createdAt"].replace("Z", "+00:00"))
+                await db.users.insert_one(user_doc)
+                logger.info(f"Seeded test user: {user_data['email']}")
+            elif existing.get("passwordHash") != user_data["passwordHash"] and existing.get("email") in ["kunde@test.ch", "anna@test.ch", "peter@test.ch"]:
+                await db.users.update_one(
+                    {"_id": existing["_id"]},
+                    {"$set": {"passwordHash": user_data["passwordHash"], "emailVerified": True, "deleted": False}}
+                )
+                logger.info(f"Updated test user hash for: {user_data['email']}")
+
+    # Start the scheduler for automated tasks
+    scheduler.add_job(process_dunning_reminders, CronTrigger(hour=9, minute=0))  # Daily at 9 AM
+    scheduler.start()
+    logger.info("Scheduler started for automated dunning reminders")
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    scheduler.shutdown()
     client.close()
 
 
+@app.websocket("/ws/notifications")
+async def websocket_notifications(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Keep connection alive
+    except:
+        manager.disconnect(websocket)
+
+
 # ----------------------------------------------------------------------------
-# App configuration
+# App configuration & CORS
 # ----------------------------------------------------------------------------
 app.include_router(api_router)
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+# Robust CORS Configuration supporting local dev, preview environments and production
+cors_origins_env = os.environ.get("CORS_ORIGINS", "*").strip()
+if cors_origins_env and cors_origins_env != "*":
+    cors_origins = [orig.strip() for orig in cors_origins_env.split(",") if orig.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"^https?://.*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

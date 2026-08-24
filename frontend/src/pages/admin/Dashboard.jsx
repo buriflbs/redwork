@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Inbox, Mail, FolderKanban, FileText, MessageSquareQuote, Wrench, AlertCircle, Receipt, FileSignature, HelpCircle, Package, Building2 } from "lucide-react";
+import { Inbox, Mail, FolderKanban, FileText, MessageSquareQuote, Wrench, AlertCircle, Receipt, FileSignature, HelpCircle, Package, Building2, Zap } from "lucide-react";
 import api from "../../api";
 import { Link } from "react-router-dom";
 
@@ -14,6 +14,8 @@ const cards = [
   { key: "services", label: "Dienstleistungen", icon: Wrench, color: "#06B6D4", to: "/admin/services" },
   { key: "faqs", label: "FAQ-Einträge", icon: HelpCircle, color: "#A855F7", to: "/admin/faqs" },
   { key: "products", label: "Produkte / Katalog", icon: Package, color: "#F97316", to: "/admin/products" },
+  { key: "hosting", label: "Hosting-Pakete", icon: Package, color: "#22C55E", to: "/admin/hosting" },
+  { key: "platform", label: "SaaS / WHM Control", icon: Zap, color: "#E63946", to: "/admin/platform" },
   { key: "companies", label: "Firmen", icon: Building2, color: "#0f172a", to: "/admin/companies" },
 ];
 

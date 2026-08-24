@@ -5,6 +5,7 @@ import { ArrowUp } from "lucide-react";
 
 import { ModalProvider } from "./contexts/ModalContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { CustomerRoute, AdminRoute } from "./components/ProtectedRoute";
 
 import Header from "./components/Header";
 import Hero from "./components/Hero";
@@ -20,14 +21,21 @@ import WhyUs from "./components/WhyUs";
 import FAQSection from "./components/FAQSection";
 import ContactSection from "./components/ContactSection";
 import Footer from "./components/Footer";
-import HostingPackages from "./components/HostingPackages";
 import QuoteWizard from "./components/QuoteWizard";
 import ContactModal from "./components/ContactModal";
 
 import AdminLogin from "./pages/admin/AdminLogin";
+import AdminProfile from "./pages/admin/AdminProfile";
 import MembershipPanel from "./pages/MembershipPanel";
+import Register from "./pages/Register";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Profile from "./pages/Profile";
+import Products from "./pages/Products";
+import Support from "./pages/Support";
+import TicketDetail from "./pages/TicketDetail";
 import AdminLayout from "./pages/admin/AdminLayout";
-import Dashboard from "./pages/admin/Dashboard";
+import AdminDashboard from "./pages/admin/Dashboard";
 import Quotes from "./pages/admin/Quotes";
 import Contacts from "./pages/admin/Contacts";
 import ProjectsAdmin from "./pages/admin/ProjectsAdmin";
@@ -38,11 +46,16 @@ import SiteSettings from "./pages/admin/SiteSettings";
 import FAQAdmin from "./pages/admin/FAQAdmin";
 import EmailTemplates from "./pages/admin/EmailTemplates";
 import Companies from "./pages/admin/Companies";
-import Products from "./pages/admin/Products";
+import AdminProducts from "./pages/admin/Products";
 import Invoices from "./pages/admin/Invoices";
 import Offers from "./pages/admin/Offers";
 import InvoiceEditor from "./pages/admin/InvoiceEditor";
 import InvoiceTemplates from "./pages/admin/InvoiceTemplates";
+import HostingPackagesAdmin from "./pages/admin/HostingPackagesAdmin";
+import Customers from "./pages/admin/Customers";
+import Orders from "./pages/admin/Orders";
+import Tickets from "./pages/admin/Tickets";
+import SaaSPlatform from "./pages/admin/SaaSPlatform";
 
 function PublicSite() {
   const [scrolled, setScrolled] = useState(false);
@@ -64,10 +77,12 @@ function PublicSite() {
       <StatsBar />
       <HowWeWork />
       <Projects />
+      <WhyUs />
       <BlogPosts />
       <Services />
-      <HostingPackages />
       <QuoteWizard />
+      <ContactSection />
+      <Footer />
       <ContactModal />
 
       {showTop && (
@@ -92,12 +107,31 @@ function App() {
           <ModalProvider>
             <Routes>
               <Route path="/" element={<PublicSite />} />
+              <Route path="/hosting" element={<PublicSite />} />
+              <Route path="/domains" element={<PublicSite />} />
 
+              {/* Auth Routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/login" element={<Login />} />
+
+              {/* Customer Routes */}
+              <Route path="/dashboard" element={<CustomerRoute><Dashboard /></CustomerRoute>} />
+              <Route path="/profile" element={<CustomerRoute><Profile /></CustomerRoute>} />
+              <Route path="/products" element={<Products />} />
+              <Route path="/support" element={<Support />} />
+              <Route path="/tickets/:ticketId" element={<TicketDetail />} />
               <Route path="/account" element={<MembershipPanel />} />
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<Dashboard />} />
+
+              {/* Admin Routes */}
+              <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="profile" element={<AdminProfile />} />
                 <Route path="site" element={<SiteSettings />} />
+                <Route path="customers" element={<Customers />} />
+                <Route path="orders" element={<Orders />} />
+                <Route path="tickets" element={<Tickets />} />
+                <Route path="platform" element={<SaaSPlatform />} />
                 <Route path="quotes" element={<Quotes />} />
                 <Route path="contacts" element={<Contacts />} />
                 <Route path="projects" element={<ProjectsAdmin />} />
@@ -107,7 +141,8 @@ function App() {
                 <Route path="faqs" element={<FAQAdmin />} />
                 <Route path="templates" element={<EmailTemplates />} />
                 <Route path="companies" element={<Companies />} />
-                <Route path="products" element={<Products />} />
+                <Route path="products" element={<AdminProducts />} />
+                <Route path="hosting" element={<HostingPackagesAdmin />} />
                 <Route path="invoices" element={<Invoices />} />
                 <Route path="invoices/new" element={<InvoiceEditor mode="invoice" />} />
                 <Route path="invoices/:id" element={<InvoiceEditor mode="invoice" />} />

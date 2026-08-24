@@ -3,6 +3,7 @@ import { Loader2, Save, Plus, Trash2, GripVertical, ArrowUp, ArrowDown, CheckCir
 import api from "../../api";
 
 const DEFAULT = {
+  headerPhone: "+41 76 298 10 15",
   heroSubtitle: "", heroTagline: "", heroSlides: [],
   badgeEnabled: true, badgeNumber: "12", badgeUnit: "MONATE",
   badgeText1: "kostenloser", badgeText2: "Support",
@@ -180,12 +181,19 @@ export default function SiteSettings() {
         )}
 
         {tab === "nav" && (
-          <ArrayEditor label={`Navigation (${arr("navItems").length})`} items={arr("navItems")} onAdd={() => itemAdd("navItems", { label: "neu", href: "#" })} onRemove={(i) => itemRemove("navItems", i)} onMove={(i, d) => itemMove("navItems", i, d)} render={(it, i) => (
-            <>
-              <Input placeholder="Label (z.B. start)" value={it.label} onChange={(e) => itemUpdate("navItems", i, { label: e.target.value })} />
-              <Input placeholder="Anker (z.B. #top)" value={it.href} onChange={(e) => itemUpdate("navItems", i, { href: e.target.value })} />
-            </>
-          )} />
+          <div className="space-y-6">
+            <Section title="📞 Header Telefonnummer (Oben Rechts)">
+              <Field label="Telefonnummer im Header" hint="Wird ganz oben rechts auf der Website und im mobilen Menü angezeigt.">
+                <Input value={data.headerPhone || ""} onChange={(e) => update("headerPhone", e.target.value)} placeholder="+41 76 298 10 15" />
+              </Field>
+            </Section>
+            <ArrayEditor label={`Navigation (${arr("navItems").length})`} items={arr("navItems")} onAdd={() => itemAdd("navItems", { label: "neu", href: "#" })} onRemove={(i) => itemRemove("navItems", i)} onMove={(i, d) => itemMove("navItems", i, d)} render={(it, i) => (
+              <>
+                <Input placeholder="Label (z.B. start)" value={it.label} onChange={(e) => itemUpdate("navItems", i, { label: e.target.value })} />
+                <Input placeholder="Anker (z.B. #top)" value={it.href} onChange={(e) => itemUpdate("navItems", i, { href: e.target.value })} />
+              </>
+            )} />
+          </div>
         )}
 
         {tab === "partners" && (
@@ -252,7 +260,15 @@ export default function SiteSettings() {
         {tab === "contact" && (
           <div className="space-y-4">
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
-              💡 Diese Daten erscheinen im Kontakt-Bereich der Startseite.
+              💡 Diese Daten erscheinen im Header und im Kontakt-Bereich der Website.
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <Field label="📞 Header-Telefonnummer (Oben Rechts)" hint="Erscheint ganz oben rechts im Header & im mobilen Menü">
+                <Input value={data.headerPhone || ""} onChange={(e) => update("headerPhone", e.target.value)} placeholder="+41 76 298 10 15" />
+              </Field>
+              <Field label="📞 Kontakt-Telefonnummer (Bereich unten)" hint="Erscheint im Kontakt-Abschnitt">
+                <Input value={data.contactPhone} onChange={(e) => update("contactPhone", e.target.value)} data-testid="contact-phone-input" placeholder="+41 76 298 10 15" />
+              </Field>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <Field label="Titel (z.B. Kontakt)"><Input value={data.contactTitle} onChange={(e) => update("contactTitle", e.target.value)} data-testid="contact-title-input" /></Field>
@@ -260,11 +276,10 @@ export default function SiteSettings() {
             </div>
             <Field label="Einleitungstext"><TextArea rows={3} value={data.contactIntro} onChange={(e) => update("contactIntro", e.target.value)} /></Field>
             <div className="grid md:grid-cols-2 gap-4">
-              <Field label="📞 Telefon"><Input value={data.contactPhone} onChange={(e) => update("contactPhone", e.target.value)} data-testid="contact-phone-input" placeholder="+41 44 000 00 00" /></Field>
               <Field label="Telefon-Zeiten"><Input value={data.contactPhoneHours} onChange={(e) => update("contactPhoneHours", e.target.value)} placeholder="Mo–Fr 8–18 Uhr" /></Field>
-              <Field label="✉️ E-Mail"><Input value={data.contactEmail} onChange={(e) => update("contactEmail", e.target.value)} data-testid="contact-email-input" placeholder="info@firma.ch" /></Field>
+              <Field label="✉️ E-Mail"><Input value={data.contactEmail} onChange={(e) => update("contactEmail", e.target.value)} data-testid="contact-email-input" placeholder="info@redwork.ch" /></Field>
               <Field label="E-Mail-Hinweis"><Input value={data.contactEmailNote} onChange={(e) => update("contactEmailNote", e.target.value)} placeholder="Antwort innert 24 h" /></Field>
-              <Field label="💬 WhatsApp"><Input value={data.contactWhatsapp} onChange={(e) => update("contactWhatsapp", e.target.value)} data-testid="contact-whatsapp-input" placeholder="+41 79 000 00 00" /></Field>
+              <Field label="💬 WhatsApp"><Input value={data.contactWhatsapp} onChange={(e) => update("contactWhatsapp", e.target.value)} data-testid="contact-whatsapp-input" placeholder="+41 76 298 10 15" /></Field>
               <Field label="📍 Adresse"><Input value={data.contactAddress} onChange={(e) => update("contactAddress", e.target.value)} data-testid="contact-address-input" placeholder="Bahnhofstrasse 1, 8001 Zürich" /></Field>
             </div>
             <Field label="🗺️ Karten-iframe URL" hint="OpenStreetMap embed-URL oder Google-Maps embed-URL.">
