@@ -871,6 +871,12 @@ class HostingAccount(BaseModel):
     createdAt: datetime = Field(default_factory=now_utc)
     updatedAt: datetime = Field(default_factory=now_utc)
 
+
+# ----- Reorder payload -----
+class ReorderIn(BaseModel):
+    ids: List[str]
+
+
 # ----------------------------------------------------------------------------
 # Auth helpers
 # ----------------------------------------------------------------------------
