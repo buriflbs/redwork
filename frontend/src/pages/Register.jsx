@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { ArrowRight, CheckCircle, AlertCircle, Loader } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { getApiErrorMessage } from "../lib/apiError";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -59,14 +60,7 @@ export default function Register() {
         navigate("/dashboard", { replace: true });
       }, 1500);
     } catch (err) {
-      const message =
-        err.response?.data?.detail ||
-        (err.code === "ECONNABORTED"
-          ? "Zeitüberschreitung bei der Verbindung. Bitte versuchen Sie es erneut."
-          : err.message === "Network Error"
-          ? "Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung."
-          : err.message || "Registrierung fehlgeschlagen");
-      setError(message);
+      setError(getApiErrorMessage(err, "Registrierung fehlgeschlagen"));
     } finally {
       setLoading(false);
     }

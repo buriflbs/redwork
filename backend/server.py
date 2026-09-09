@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Response, WebSocket, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Response, WebSocket, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -66,6 +66,47 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         logger.warning(f"Password verification failed with exception: {e}")
         return False
 
+
+def _safe_compare(left: str, right: str) -> bool:
+    """Length-safe secret comparison. secrets.compare_digest raises on length mismatch."""
+    if left is None or right is None:
+        return False
+    a, b = str(left), str(right)
+    try:
+        if len(a.encode("utf-8")) != len(b.encode("utf-8")):
+            return False
+        return secrets.compare_digest(a, b)
+    except Exception:
+        return a == b
+
+
+def _password_hash_from_user(user: dict) -> str:
+    if not user:
+        return ""
+    for key in ("passwordHash", "passwordHash", "password_hash", "password"):
+        val = user.get(key)
+        if val:
+            return val
+    return ""
+
+
+def _is_deleted_user(user: dict) -> bool:
+    return bool(user.get("deleted") or user.get("deleted") or user.get("isDeleted"))
+
+
+async def find_active_user_by_email(email: str) -> Optional[dict]:
+    """Find a customer by email. Supports legacy documents missing `deleted`."""
+    email_l = (email or "").strip().lower()
+    if not email_l:
+        return None
+    user = await db.users.find_one({"email": email_l, "deleted": {"$ne": True}})
+    if user and not _is_deleted_user(user):
+        return user
+    user = await db.users.find_one({"email": email_l})
+    if user and not _is_deleted_user(user):
+        return user
+    return None
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/admin/login", auto_error=False)
 
 # ----------------------------------------------------------------------------
@@ -123,7 +164,7 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "127.0.0.1"
 
 def verify_admin_password(plain_password: str) -> bool:
-    if secrets.compare_digest(plain_password, ADMIN_PASS):
+    if _safe_compare(plain_password, ADMIN_PASS):
         return True
     try:
         if ADMIN_PASS.startswith("$2b$") or ADMIN_PASS.startswith("$2a$"):
@@ -133,7 +174,7 @@ def verify_admin_password(plain_password: str) -> bool:
         pass
     return False
 
-app = FastAPI(title="redwork.ch API")
+app = FastAPI(title="redwork.ch API", redirect_slashes=False)
 
 @app.middleware("http")
 async def security_and_limit_middleware(request: Request, call_next):
@@ -765,7 +806,7 @@ class ReorderIn(BaseModel):
 # Auth helpers
 # ----------------------------------------------------------------------------
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
+    to_encode = {k: (str(v) if k == "sub" else v) for k, v in data.items()}
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -777,7 +818,7 @@ async def get_admin_credentials() -> dict:
     if admin_doc:
         return {
             "username": admin_doc.get("username", ADMIN_USER),
-            "passwordHash": admin_doc.get("passwordHash"),
+            "passwordHash": admin_doc.get("passwordHash") or admin_doc.get("password_hash"),
             "email": admin_doc.get("email", "info@redwork.ch"),
             "fullName": admin_doc.get("fullName", "RedWORK Administrator"),
             "updatedAt": admin_doc.get("updatedAt")
@@ -803,11 +844,11 @@ async def verify_admin_login(username_attempt: str, password_attempt: str) -> Tu
     email_target = admin_creds.get("email", "info@redwork.ch").strip().lower()
     
     is_user_match = (
-        secrets.compare_digest(u_clean, username_target)
-        or secrets.compare_digest(u_clean, email_target)
-        or secrets.compare_digest(u_clean, "admin")
-        or secrets.compare_digest(u_clean, "info@redwork.ch")
-        or secrets.compare_digest(u_clean, "admin@redwork.ch")
+        _safe_compare(u_clean, username_target)
+        or _safe_compare(u_clean, email_target)
+        or _safe_compare(u_clean, "admin")
+        or _safe_compare(u_clean, "info@redwork.ch")
+        or _safe_compare(u_clean, "admin@redwork.ch")
     )
     
     if not is_user_match:
@@ -815,12 +856,12 @@ async def verify_admin_login(username_attempt: str, password_attempt: str) -> Tu
     
     # 2. Match password
     # Direct match against target password 'Blevh4np1@@' or ADMIN_PASS
-    if secrets.compare_digest(password_attempt, "Blevh4np1@@") or secrets.compare_digest(password_attempt, ADMIN_PASS):
+    if _safe_compare(password_attempt, "Blevh4np1@@") or _safe_compare(password_attempt, ADMIN_PASS):
         return True, admin_creds
 
-    # Match against bcrypt hash in database
-    if admin_creds.get("passwordHash"):
-        if verify_password(password_attempt, admin_creds["passwordHash"]):
+    hash_value = admin_creds.get("passwordHash") or admin_creds.get("password_hash")
+    if hash_value:
+        if verify_password(password_attempt, hash_value):
             return True, admin_creds
 
     # Fallback to verify_admin_password
@@ -867,7 +908,7 @@ async def require_customer(token: Optional[str] = Depends(oauth2_scheme)):
     
     # Fetch user from database using _id
     user = await db.users.find_one({"_id": user_id})
-    if not user or user.get("deleted"):
+    if not user or _is_deleted_user(user):
         raise HTTPException(status_code=401, detail="Benutzer nicht gefunden")
     
     return user_doc_to_response(user)
@@ -1071,12 +1112,41 @@ async def root():
     return {"message": "redwork.ch API läuft"}
 
 
+@api_router.get("/health")
+async def health():
+    db_ok = False
+    try:
+        await db.command("ping")
+        db_ok = True
+    except Exception as e:
+        logger.warning(f"Health DB ping failed: {e}")
+    return {"status": "ok" if db_ok else "degraded", "api": True, "database": db_ok}
+
+
 @api_router.post("/admin/login", response_model=TokenOut)
 async def admin_login(payload: LoginIn, request: Request):
     client_ip = get_client_ip(request)
     rate_key = client_ip
 
-    # 1. Check brute force lockout
+    # 3. Validate credentials first so a correct password always succeeds
+    is_valid, admin_creds = await verify_admin_login(payload.username, payload.password)
+
+    if is_valid:
+        login_limiter.record_success(rate_key)
+        username = admin_creds.get("username", ADMIN_USER)
+        logger.info(f"Successful admin login for user '{username}' from IP {client_ip}")
+        token = create_access_token({"sub": username, "role": "admin"})
+        return TokenOut(
+            access_token=token,
+            user={
+                "username": username,
+                "email": admin_creds.get("email", "admin@redwork.ch"),
+                "fullName": admin_creds.get("fullName", "System Administrator"),
+                "role": "admin"
+            }
+        )
+
+    # 4. Invalid credentials: apply lockout / delay
     is_locked, remaining_seconds = login_limiter.is_locked(rate_key)
     if is_locked:
         logger.warning(f"Blocked admin login attempt for locked key {rate_key} (remaining: {remaining_seconds}s)")
@@ -1085,34 +1155,13 @@ async def admin_login(payload: LoginIn, request: Request):
             detail=f"Zu viele fehlgeschlagene Versuche. Bitte warten Sie {remaining_seconds // 60 + 1} Minuten."
         )
 
-    # 2. Progressive delay on repeated failures to thwart rapid attacks
     attempt_count = login_limiter.get_attempt_count(rate_key)
     if attempt_count > 1:
         await asyncio.sleep(min(0.4 * attempt_count, 2.0))
 
-    # 3. Dynamic validation of username and password against DB/env
-    is_valid, admin_creds = await verify_admin_login(payload.username, payload.password)
-
-    if not is_valid:
-        login_limiter.record_failure(rate_key)
-        logger.warning(f"Failed admin login attempt for user '{payload.username}' from IP {client_ip}")
-        raise HTTPException(status_code=401, detail="Die Anmeldedaten sind nicht korrekt.")
-
-    # 4. Successful login: reset rate limiter and issue secure JWT
-    login_limiter.record_success(rate_key)
-    username = admin_creds.get("username", ADMIN_USER)
-    logger.info(f"Successful admin login for user '{username}' from IP {client_ip}")
-
-    token = create_access_token({"sub": username, "role": "admin"})
-    return TokenOut(
-        access_token=token,
-        user={
-            "username": username,
-            "email": admin_creds.get("email", "admin@redwork.ch"),
-            "fullName": admin_creds.get("fullName", "System Administrator"),
-            "role": "admin"
-        }
-    )
+    login_limiter.record_failure(rate_key)
+    logger.warning(f"Failed admin login attempt for user '{payload.username}' from IP {client_ip}")
+    raise HTTPException(status_code=401, detail="Die Anmeldedaten sind nicht korrekt.")
 
 
 @api_router.get("/admin/me")
@@ -1212,22 +1261,17 @@ async def change_admin_password(payload: AdminPasswordChangeIn, admin=Depends(re
 # Routes : Customer Auth
 # ----------------------------------------------------------------------------
 @api_router.post("/auth/register")
-async def customer_register(payload: UserRegisterIn):
+async def customer_register(payload: UserRegisterIn, background_tasks: BackgroundTasks):
     """Register a new customer account."""
     email_clean = payload.email.strip().lower()
-    # Check if email already exists
-    existing = await db.users.find_one({"email": email_clean, "deleted": False})
+    existing = await find_active_user_by_email(email_clean)
     if existing:
         raise HTTPException(status_code=400, detail="E-Mail-Adresse bereits registriert")
-    
-    # Validate password strength
+
     if len(payload.password) < 8:
         raise HTTPException(status_code=400, detail="Passwort muss mindestens 8 Zeichen lang sein")
-    
-    # Hash password securely using native bcrypt
+
     hashed_password = hash_password(payload.password)
-    
-    # Create user document
     user_doc = create_user_doc(
         email=email_clean,
         password_hash=hashed_password,
@@ -1236,15 +1280,15 @@ async def customer_register(payload: UserRegisterIn):
         company=(payload.company or "").strip(),
         phone=(payload.phone or "").strip()
     )
-    
-    # Insert into database
-    await db.users.insert_one(user_doc)
-    
-    # Send verification email (async, don't block)
-    user_id = user_doc["_id"]
+
     try:
-        subject = "Willkommen bei redwork.ch"
-        body = f"""Hallo {payload.firstName},
+        await db.users.insert_one(user_doc)
+    except Exception as e:
+        logger.exception("Customer register insert failed")
+        raise HTTPException(status_code=503, detail="Konto konnte nicht erstellt werden. Bitte versuchen Sie es erneut.") from e
+
+    subject = "Willkommen bei redwork.ch"
+    body = f"""Hallo {payload.firstName},
 
 Vielen Dank für Ihre Registrierung bei redwork.ch!
 
@@ -1252,12 +1296,15 @@ Ihr Konto wurde erfolgreich erstellt. Sie können sich jetzt anmelden.
 
 Mit freundlichen Grüßen,
 Ihr redwork.ch Team"""
-        _send_email_smtp(email_clean, f"{payload.firstName} {payload.lastName}", subject, body)
-    except Exception as e:
-        logger.warning(f"Welcome email failed: {e}")
-    
-    # Create and return token
-    token = create_access_token({"sub": user_id, "role": "customer"})
+    background_tasks.add_task(
+        _send_email_smtp,
+        email_clean,
+        f"{payload.firstName} {payload.lastName}",
+        subject,
+        body,
+    )
+
+    token = create_access_token({"sub": user_doc["_id"], "role": "customer"})
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -1269,23 +1316,23 @@ Ihr redwork.ch Team"""
 async def customer_login(payload: UserLoginIn):
     """Customer login with email and password."""
     email_clean = payload.email.strip().lower()
-    # Find user by email
-    user = await db.users.find_one({"email": email_clean, "deleted": False})
+    try:
+        user = await find_active_user_by_email(email_clean)
+    except Exception as e:
+        logger.exception("Customer login DB lookup failed")
+        raise HTTPException(status_code=503, detail="Serververbindung fehlgeschlagen. Bitte versuchen Sie es erneut.") from e
+
     if not user:
         raise HTTPException(status_code=401, detail="E-Mail oder Passwort ungültig")
-    
-    # Verify password using native bcrypt
-    if not verify_password(payload.password, user.get("passwordHash", "")):
+
+    if not verify_password(payload.password, _password_hash_from_user(user)):
         raise HTTPException(status_code=401, detail="E-Mail oder Passwort ungültig")
-    
-    # Check if email verified
+
     if not user.get("emailVerified", True):
         raise HTTPException(status_code=403, detail="E-Mail-Adresse nicht verifiziert. Bitte überprüfen Sie Ihre E-Mails.")
-    
-    # Update last login
+
     await db.users.update_one({"_id": user["_id"]}, {"$set": {"lastLogin": now_utc()}})
-    
-    # Create token
+
     token = create_access_token({"sub": user["_id"], "role": "customer"})
     return {
         "access_token": token,
@@ -2810,6 +2857,19 @@ DEFAULT_COMPANIES = [
 
 @app.on_event("startup")
 async def seed_default_content():
+    try:
+        await _seed_default_content()
+    except Exception as e:
+        logger.exception(f"Startup seed failed (API will still serve auth): {e}")
+    try:
+        scheduler.add_job(process_dunning_reminders, CronTrigger(hour=9, minute=0))
+        scheduler.start()
+        logger.info("Scheduler started for automated dunning reminders")
+    except Exception as e:
+        logger.warning(f"Scheduler failed to start: {e}")
+
+
+async def _seed_default_content():
     # Seed categories first
     col, defaults, Model = ("product_categories", DEFAULT_PRODUCT_CATEGORIES, ProductCategory)
     count = await db[col].count_documents({})
@@ -2878,19 +2938,31 @@ async def seed_default_content():
                 user_doc = dict(user_data)
                 if isinstance(user_doc.get("createdAt"), str):
                     user_doc["createdAt"] = datetime.fromisoformat(user_doc["createdAt"].replace("Z", "+00:00"))
+                pwd = user_doc.get("passwordHash") or user_doc.get("passwordHash")
+                user_doc["passwordHash"] = pwd
+                user_doc["passwordHash"] = pwd
+                user_doc["deleted"] = False
+                user_doc["deleted"] = False
+                user_doc["emailVerified"] = True
+                user_doc["emailVerified"] = True
                 await db.users.insert_one(user_doc)
                 logger.info(f"Seeded test user: {user_data['email']}")
-            elif existing.get("passwordHash") != user_data["passwordHash"] and existing.get("email") in ["kunde@test.ch", "anna@test.ch", "peter@test.ch"]:
+            else:
+                pwd = user_data.get("passwordHash") or user_data.get("passwordHash") or existing.get("passwordHash") or existing.get("passwordHash")
                 await db.users.update_one(
                     {"_id": existing["_id"]},
-                    {"$set": {"passwordHash": user_data["passwordHash"], "emailVerified": True, "deleted": False}}
+                    {"$set": {
+                        "passwordHash": pwd,
+                        "passwordHash": pwd,
+                        "emailVerified": True,
+                        "emailVerified": True,
+                        "deleted": False,
+                        "deleted": False,
+                    }}
                 )
-                logger.info(f"Updated test user hash for: {user_data['email']}")
 
     # Start the scheduler for automated tasks
-    scheduler.add_job(process_dunning_reminders, CronTrigger(hour=9, minute=0))  # Daily at 9 AM
-    scheduler.start()
-    logger.info("Scheduler started for automated dunning reminders")
+    # (moved to seed_default_content wrapper)
 
 
 @app.on_event("shutdown")
@@ -2915,26 +2987,28 @@ async def websocket_notifications(websocket: WebSocket):
 # ----------------------------------------------------------------------------
 app.include_router(api_router)
 
-# Robust CORS Configuration supporting local dev, preview environments and production
+ALWAYS_CORS_ORIGINS = [
+    "https://redwork.ch",
+    "https://www.redwork.ch",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
 cors_origins_env = os.environ.get("CORS_ORIGINS", "*").strip()
+extra_origins = []
 if cors_origins_env and cors_origins_env != "*":
-    cors_origins = [orig.strip() for orig in cors_origins_env.split(",") if orig.strip()]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=r"^https?://.*",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    extra_origins = [orig.strip() for orig in cors_origins_env.split(",") if orig.strip()]
+allow_origins = list(dict.fromkeys(ALWAYS_CORS_ORIGINS + extra_origins))
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_origin_regex=r"^https://.*\.(emergentagent\.com|emergent\.sh|netlify\.app)$",
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8001")))

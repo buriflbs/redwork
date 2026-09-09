@@ -1,44 +1,8 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { ChevronsDown, ShieldCheck } from "lucide-react";
 import { useModals } from "../contexts/ModalContext";
 import { API } from "../api";
-
-function MatrixBg() {
-  const cols = useMemo(() => {
-    const arr = [];
-    const chars = "アイウエオカキクケコサシスセソ0123456789ABCDEF";
-    for (let i = 0; i < 40; i++) {
-      let s = "";
-      for (let j = 0; j < 28; j++) s += chars[Math.floor(Math.random() * chars.length)];
-      arr.push({
-        id: `mc-${i}`,
-        text: s,
-        left: `${(i / 40) * 100 + Math.random() * 2}%`,
-        duration: 8 + Math.random() * 12,
-        delay: -Math.random() * 10,
-      });
-    }
-    return arr;
-  }, []);
-
-  return (
-    <div className="matrix-bg pointer-events-none">
-      {cols.map((c) => (
-        <div
-          key={c.id}
-          className="matrix-column"
-          style={{
-            left: c.left,
-            animationDuration: `${c.duration}s`,
-            animationDelay: `${c.delay}s`,
-          }}
-        >
-          {c.text}
-        </div>
-      ))}
-    </div>
-  );
-}
+import MatrixStreamCanvas from "./MatrixStreamCanvas";
 
 // Renders text with <y>...</y> markers turned into yellow spans (safe, no HTML eval).
 function renderRich(text) {
@@ -111,7 +75,7 @@ export default function Hero() {
 
   return (
     <section id="top" className="relative min-h-[84vh] sm:min-h-[88vh] bg-[#020617] overflow-hidden flex items-center justify-center pt-24 sm:pt-28 md:pt-32 pb-16 sm:pb-20">
-      <MatrixBg />
+      <MatrixStreamCanvas />
       <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
 
       {/* Support Badge (Directly anchored to section top-right, perfectly positioned near top of hero) */}

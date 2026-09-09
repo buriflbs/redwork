@@ -1,7 +1,9 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ShieldCheck, Wallet, FileText, HelpCircle, ArrowRight, CreditCard, Star, CheckCircle } from "lucide-react";
 import { useModals } from "../contexts/ModalContext";
+import { useAuth } from "../contexts/AuthContext";
+import { getApiErrorMessage } from "../lib/apiError";
 
 const DEMO_ACCOUNT = {
   name: "RedWork Kunde",
@@ -18,16 +20,27 @@ export default function MembershipPanel() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [loggedIn, setLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { openQuote } = useModals();
+  const { customerLogin } = useAuth();
+  const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     if (!form.email || !form.password) {
       setLoginError("Bitte geben Sie E-Mail und Passwort ein.");
       return;
     }
-    setLoggedIn(true);
+    setSubmitting(true);
     setLoginError("");
+    try {
+      await customerLogin(form.email, form.password);
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      setLoginError(getApiErrorMessage(err, "Anmeldung fehlgeschlagen"));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -189,8 +202,8 @@ export default function MembershipPanel() {
                   className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-[#0f172a] focus:border-[#0f172a] focus:outline-none"
                 />
                 {loginError && <div className="text-sm text-[#dc2626]">{loginError}</div>}
-                <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#E63946] px-6 py-3 text-sm font-bold text-white hover:bg-[#c5303d] transition-colors">
-                  Anmelden
+                <button type="submit" disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#E63946] px-6 py-3 text-sm font-bold text-white hover:bg-[#c5303d] transition-colors disabled:opacity-50">
+                  {submitting ? "Wird angemeldet..." : "Anmelden"}
                   <ArrowRight size={18} />
                 </button>
                 <div className="text-center mt-6">

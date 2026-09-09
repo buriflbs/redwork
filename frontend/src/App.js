@@ -23,6 +23,7 @@ import ContactSection from "./components/ContactSection";
 import Footer from "./components/Footer";
 import QuoteWizard from "./components/QuoteWizard";
 import ContactModal from "./components/ContactModal";
+import FloatingCTA from "./components/FloatingCTA";
 
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminProfile from "./pages/admin/AdminProfile";
@@ -84,6 +85,7 @@ function PublicSite() {
       <ContactSection />
       <Footer />
       <ContactModal />
+      <FloatingCTA />
 
       {showTop && (
         <button

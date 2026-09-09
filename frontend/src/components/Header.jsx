@@ -115,8 +115,17 @@ export default function Header({ scrolled }) {
             </a>
           )}
           {user && <button onClick={logout} className="text-sm font-semibold text-white/60 hover:text-white">Abmelden</button>}
-          <button onClick={openQuote} className="rounded-full bg-gradient-to-r from-[#E63946] to-[#ff6b35] px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-red-900/30 transition hover:scale-[1.03]">
-            Angebot
+          <button
+            onClick={openQuote}
+            className="group relative overflow-hidden rounded-full bg-gradient-to-r from-[#E63946] via-[#f72585] to-[#ff6b35] px-6 py-2.5 text-sm font-black text-white shadow-[0_0_22px_rgba(230,57,70,0.45)] hover:shadow-[0_0_32px_rgba(230,57,70,0.7)] transition-all duration-300 hover:scale-105 active:scale-95 animate-subtle-float flex items-center gap-1.5"
+            aria-label="Kostenloses Angebot einholen"
+          >
+            <span className="relative z-10 flex items-center gap-1.5">
+              <span>Angebot</span>
+              <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>
+            </span>
+            {/* Shimmer light streak passing across button */}
+            <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full pointer-events-none" />
           </button>
         </div>
 

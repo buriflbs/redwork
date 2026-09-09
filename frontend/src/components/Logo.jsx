@@ -17,10 +17,16 @@ export default function Logo({ size = "md", inverted = false }) {
       <span className={`${s.brk} font-bold ${inverted ? "text-[#475569]" : "text-white/70"} ml-0.5`}>
         .ch
       </span>
-      <span className="ml-1 inline-flex items-center">
-        <span className="text-[#1E88E5] font-bold" style={{ fontSize: "1.2em" }}>&lt;</span>
-        <span className="text-[#E63946] font-bold" style={{ fontSize: "1.2em" }}>/</span>
-        <span className="text-[#1E88E5] font-bold" style={{ fontSize: "1.2em" }}>&gt;</span>
+      <span className="ml-1.5 inline-flex items-center">
+        <img 
+          src="/logo-chevron.png" 
+          alt="RedWORK Symbol" 
+          className="h-[22px] w-auto inline-block object-contain"
+          onError={(e) => {
+            // Fallback to text markup if image unavailable
+            e.currentTarget.style.display = 'none';
+          }} 
+        />
       </span>
     </div>
   );

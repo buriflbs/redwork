@@ -1,41 +1,47 @@
 import axios from "axios";
 
-const getBackendUrl = () => {
-  if (typeof window !== "undefined" && window.location) {
-    const hostname = window.location.hostname;
-    const isLocalhost =
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname.endsWith(".local");
-
-    // Only use REACT_APP_BACKEND_URL if actually developing on localhost
-    if (isLocalhost && process.env.REACT_APP_BACKEND_URL) {
-      return process.env.REACT_APP_BACKEND_URL;
-    }
-    // In production or on live domain (redwork.ch), ALWAYS use current origin
-    return window.location.origin;
+/**
+ * Browser always talks to same-origin `/api`.
+ * - Production: nginx / ingress proxies /api → FastAPI
+ * - Development: src/setupProxy.js proxies /api → REACT_APP_BACKEND_URL or :8001
+ *
+ * REACT_APP_BACKEND_URL is intentionally NOT used in the browser. Baking
+ * localhost into a production bundle is a primary cause of Axios "Network Error".
+ */
+function getApiBase() {
+  const explicit = (process.env.REACT_APP_API_URL || "").trim();
+  if (explicit) {
+    return explicit.replace(/\/$/, "");
   }
-  return "";
-};
+  return "/api";
+}
 
-const BACKEND_URL = getBackendUrl();
-export const API = `${BACKEND_URL.replace(/\/$/, "")}/api`;
+export const API = getApiBase();
 
 const TOKEN_KEY = "redwork_auth_token";
+const ADMIN_TOKEN_KEY = "redwork_admin_token";
 
 export const tokenStorage = {
   get: () => {
     try {
-      return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem("redwork_admin_token") || localStorage.getItem("redwork_admin_token");
+      return (
+        sessionStorage.getItem(TOKEN_KEY) ||
+        localStorage.getItem(TOKEN_KEY) ||
+        sessionStorage.getItem(ADMIN_TOKEN_KEY) ||
+        localStorage.getItem(ADMIN_TOKEN_KEY)
+      );
     } catch {
       return null;
     }
   },
-  set: (token) => {
+  set: (token, remember = true) => {
     try {
-      if (token) {
-        sessionStorage.setItem(TOKEN_KEY, token);
+      if (!token) return;
+      sessionStorage.setItem(TOKEN_KEY, token);
+      if (remember) {
         localStorage.setItem(TOKEN_KEY, token);
+      } else {
+        localStorage.removeItem(TOKEN_KEY);
       }
     } catch (e) {
       console.warn("Could not save token:", e);
@@ -45,8 +51,8 @@ export const tokenStorage = {
     try {
       sessionStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(TOKEN_KEY);
-      sessionStorage.removeItem("redwork_admin_token");
-      localStorage.removeItem("redwork_admin_token");
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
     } catch (e) {
       console.warn("Could not remove token:", e);
     }
@@ -55,7 +61,7 @@ export const tokenStorage = {
 
 const api = axios.create({
   baseURL: API,
-  timeout: 15000,
+  timeout: 20000,
   headers: {
     "Content-Type": "application/json",
   },

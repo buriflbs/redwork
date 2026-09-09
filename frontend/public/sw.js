@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-globals */
 // Minimal PWA service worker: cache-first for static assets, network-first for navigation/api.
-const CACHE = "redwork-static-v1";
+const CACHE = "redwork-static-v2";
 const CORE = ["/", "/manifest.json"];
 
 self.addEventListener("install", (e) => {

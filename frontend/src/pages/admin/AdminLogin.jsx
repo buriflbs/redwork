@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { Lock, User, Loader2, AlertCircle, Eye, EyeOff, ShieldCheck, ArrowRight } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import Logo from "../../components/Logo";
+import { getApiErrorMessage } from "../../lib/apiError";
 
 export default function AdminLogin() {
   const { user, adminLogin, loading } = useAuth();
@@ -28,20 +29,19 @@ export default function AdminLogin() {
     setSubmitting(true);
     try {
       try {
-        await adminLogin(rawUser, password);
+        await adminLogin(rawUser, password, rememberMe);
       } catch (firstErr) {
         // Intelligent fallback: If user typed email, try "admin"
         const lower = rawUser.toLowerCase();
         if (lower === "info@redwork.ch" || lower === "admin@redwork.ch" || lower.includes("@")) {
-          await adminLogin("admin", password);
+          await adminLogin("admin", password, rememberMe);
         } else {
           throw firstErr;
         }
       }
       nav("/admin", { replace: true });
     } catch (e) {
-      const detail = e.response?.data?.detail;
-      setErr(detail || "Die Anmeldedaten sind nicht korrekt.");
+      setErr(e.displayMessage || getApiErrorMessage(e, "Die Anmeldedaten sind nicht korrekt."));
     } finally {
       setSubmitting(false);
     }

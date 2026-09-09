@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import api, { tokenStorage } from "../api";
+import { getApiErrorMessage } from "../lib/apiError";
 
 const AuthContext = createContext();
 
@@ -49,23 +50,21 @@ export function AuthProvider({ children }) {
   /**
    * Admin login
    */
-  const adminLogin = useCallback(async (username, password) => {
+  const adminLogin = useCallback(async (username, password, remember = true) => {
     try {
       const response = await api.post("/admin/login", { username, password });
-      tokenStorage.set(response.data.access_token);
+      const token = response.data.access_token || response.data.token;
+      if (!token) {
+        throw new Error("Ungültige Serverantwort: kein Zugriffstoken");
+      }
+      tokenStorage.set(token, remember);
       setUser({ ...response.data.user, role: "admin" });
       setError(null);
       return response.data.user;
     } catch (err) {
-      const message =
-        err.response?.data?.detail ||
-        (err.code === "ECONNABORTED"
-          ? "Zeitüberschreitung bei der Anfrage. Bitte versuchen Sie es erneut."
-          : err.message === "Network Error"
-          ? "Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Netzwerkverbindung."
-          : err.message || "Anmeldung fehlgeschlagen");
+      const message = getApiErrorMessage(err, "Anmeldung fehlgeschlagen");
       setError(message);
-      throw err;
+      throw Object.assign(err, { displayMessage: message });
     }
   }, []);
 
@@ -75,20 +74,18 @@ export function AuthProvider({ children }) {
   const customerRegister = useCallback(async (data) => {
     try {
       const response = await api.post("/auth/register", data);
-      tokenStorage.set(response.data.access_token);
+      const token = response.data.access_token || response.data.token;
+      if (!token) {
+        throw new Error("Ungültige Serverantwort: kein Zugriffstoken");
+      }
+      tokenStorage.set(token, true);
       setUser({ ...response.data.user, role: "customer" });
       setError(null);
       return response.data.user;
     } catch (err) {
-      const message =
-        err.response?.data?.detail ||
-        (err.code === "ECONNABORTED"
-          ? "Zeitüberschreitung bei der Anfrage. Bitte versuchen Sie es erneut."
-          : err.message === "Network Error"
-          ? "Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Netzwerkverbindung."
-          : err.message || "Registrierung fehlgeschlagen");
+      const message = getApiErrorMessage(err, "Registrierung fehlgeschlagen");
       setError(message);
-      throw err;
+      throw Object.assign(err, { displayMessage: message });
     }
   }, []);
 
@@ -98,20 +95,18 @@ export function AuthProvider({ children }) {
   const customerLogin = useCallback(async (email, password) => {
     try {
       const response = await api.post("/auth/login", { email, password });
-      tokenStorage.set(response.data.access_token);
+      const token = response.data.access_token || response.data.token;
+      if (!token) {
+        throw new Error("Ungültige Serverantwort: kein Zugriffstoken");
+      }
+      tokenStorage.set(token, true);
       setUser({ ...response.data.user, role: "customer" });
       setError(null);
       return response.data.user;
     } catch (err) {
-      const message =
-        err.response?.data?.detail ||
-        (err.code === "ECONNABORTED"
-          ? "Zeitüberschreitung bei der Anfrage. Bitte versuchen Sie es erneut."
-          : err.message === "Network Error"
-          ? "Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Netzwerkverbindung."
-          : err.message || "Anmeldung fehlgeschlagen");
+      const message = getApiErrorMessage(err, "Anmeldung fehlgeschlagen");
       setError(message);
-      throw err;
+      throw Object.assign(err, { displayMessage: message });
     }
   }, []);
 
