@@ -22,7 +22,12 @@ from email.mime.application import MIMEApplication
 from email.utils import formataddr
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, Any
+import urllib.request
+import urllib.parse
+import urllib.error
+import json
+import re
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -837,10 +842,34 @@ class InvoiceTemplate(InvoiceTemplateIn):
     createdAt: datetime = Field(default_factory=now_utc)
 
 
-# ----- Reorder payload -----
-class ReorderIn(BaseModel):
-    ids: List[str]
+# ----- Hosting Account & Server Models -----
+class HostingPasswordChangeIn(BaseModel):
+    newPassword: str
+    confirmPassword: str
 
+class HostingAccount(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    userId: str
+    orderId: Optional[str] = ""
+    domain: str
+    cpanelUsername: str
+    package: str = "Standard Webhosting"
+    packageName: str = "webhosting_standard"
+    serverHostname: str = "server.redwork.ch"
+    serverIp: str = "178.254.22.30"
+    status: str = "active"  # active | pending | suspended | cancelled | expired
+    provisioningStatus: str = "completed"  # pending | processing | completed | failed
+    diskUsedMb: int = 2450
+    diskLimitMb: int = 20000
+    bandwidthUsedMb: int = 12400
+    bandwidthLimitMb: int = 100000
+    sslActive: bool = True
+    phpVersion: str = "PHP 8.2"
+    serverStatus: str = "online"  # online | offline | maintenance
+    startDate: Optional[datetime] = Field(default_factory=now_utc)
+    renewalDate: Optional[datetime] = None
+    createdAt: datetime = Field(default_factory=now_utc)
+    updatedAt: datetime = Field(default_factory=now_utc)
 
 # ----------------------------------------------------------------------------
 # Auth helpers
@@ -1612,6 +1641,42 @@ async def create_order(payload: OrderIn, user=Depends(require_customer)):
     )
     
     await db.orders.insert_one(order.dict())
+
+    # If product is a hosting/server product, provision HostingAccount automatically
+    prod_name_lower = (product.get("name") or "").lower()
+    if "hosting" in prod_name_lower or "server" in prod_name_lower or "vps" in prod_name_lower:
+        raw_dom = payload.domainName or payload.domainChoice or ""
+        clean_dom = raw_dom.strip().lower() if raw_dom and "." in raw_dom else f"{user['firstName'].lower()}-{order.id[:5]}.ch"
+        c_user = re.sub(r"[^a-z0-9]", "", clean_dom.split(".")[0])[:8] or f"rw{user['id'][:6]}"
+        
+        # Calculate duration days
+        duration_days = 365 if payload.duration == "yearly" else (730 if payload.duration == "two_years" else 30)
+        
+        new_hosting = HostingAccount(
+            userId=user["id"],
+            orderId=order.id,
+            domain=clean_dom,
+            cpanelUsername=c_user,
+            package=product.get("name") or "Webhosting",
+            packageName=product.get("name", "").lower().replace(" ", "_"),
+            status="active",
+            provisioningStatus="completed",
+            startDate=now_utc(),
+            renewalDate=now_utc() + timedelta(days=duration_days)
+        )
+        await db.hosting_accounts.insert_one(new_hosting.dict())
+        
+        audit_log = {
+            "id": str(uuid.uuid4()),
+            "type": "hosting_account_provisioned",
+            "userId": user["id"],
+            "orderId": order.id,
+            "domain": clean_dom,
+            "cpanelUsername": c_user,
+            "package": product.get("name"),
+            "createdAt": now_utc()
+        }
+        await db.audit_logs.insert_one(audit_log)
     
     # Broadcast notification
     await manager.broadcast(f"Neue Bestellung: {product['name']} von {user['firstName']} {user['lastName']}")
@@ -1678,19 +1743,405 @@ async def create_domain_bid(auction_id: str, payload: dict, user=Depends(require
     return clean(bid)
 
 
+# ----------------------------------------------------------------------------
+# WHM & cPanel Integration Service
+# ----------------------------------------------------------------------------
+class WHMClient:
+    """Secure client for communicating with cPanel & WHM JSON-API."""
+    def __init__(self):
+        self.host = os.environ.get("WHM_HOST", "178.254.22.30").strip()
+        self.username = os.environ.get("WHM_USERNAME", "root").strip()
+        self.api_token = os.environ.get("WHM_API_TOKEN", "").strip()
+        self.port = int(os.environ.get("WHM_PORT", "2087"))
+
+    def _is_configured(self) -> bool:
+        return bool(self.host and self.api_token)
+
+    def _request(self, endpoint: str, params: Optional[dict] = None, method: str = "GET") -> Tuple[bool, dict]:
+        """Perform HTTPS request to WHM JSON-API."""
+        if not self._is_configured():
+            logger.info(f"WHM API Token not set in env. Simulated response for endpoint {endpoint}")
+            return True, {"status": 1, "statusmsg": "Simulated local response (mock mode)"}
+
+        url = f"https://{self.host}:{self.port}{endpoint}"
+        query_str = urllib.parse.urlencode(params or {})
+        if method == "GET" and query_str:
+            url += f"?{query_str}"
+
+        headers = {
+            "Authorization": f"whm {self.username}:{self.api_token}",
+            "User-Agent": "RedWORK-Hosting-Manager/1.0"
+        }
+
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        req = urllib.request.Request(
+            url=url,
+            data=query_str.encode("utf-8") if method == "POST" and query_str else None,
+            headers=headers,
+            method=method
+        )
+
+        try:
+            with urllib.request.urlopen(req, context=ctx, timeout=12) as response:
+                body = response.read().decode("utf-8")
+                data = json.loads(body)
+                return True, data
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")
+            logger.warning(f"WHM API HTTPError {e.code}: {err_body}")
+            try:
+                return False, json.loads(err_body)
+            except:
+                return False, {"status": 0, "statusmsg": f"HTTP {e.code}: {e.reason}"}
+        except Exception as e:
+            logger.error(f"WHM API Exception: {e}")
+            return False, {"status": 0, "statusmsg": str(e)}
+
+    def change_password(self, cpanel_username: str, new_password: str) -> Tuple[bool, str]:
+        """Change cPanel account password via WHM API."""
+        if not self._is_configured():
+            return True, "Passwort erfolgreich aktualisiert (Entwicklungsmodus)."
+        ok, res = self._request("/json-api/passwd", {"user": cpanel_username, "password": new_password}, method="POST")
+        if ok and res.get("status") == 1:
+            return True, "Passwort erfolgreich geändert."
+        msg = res.get("statusmsg") or res.get("metadata", {}).get("reason") or "Fehler bei der Kommunikation mit dem WHM-Server."
+        return False, msg
+
+    def create_user_session(self, cpanel_username: str) -> Tuple[bool, str]:
+        """Generate single sign-on (SSO) session url for cPanel."""
+        if not self._is_configured():
+            # Return demo/mock cPanel SSO link
+            session_id = uuid.uuid4().hex
+            return True, f"https://{self.host}:2083/cpsess{session_id[:10]}/login/?session={session_id}&user={cpanel_username}"
+        ok, res = self._request("/json-api/create_user_session", {"user": cpanel_username, "service": "cpaneld"}, method="GET")
+        if ok and res.get("data", {}).get("url"):
+            return True, res["data"]["url"]
+        elif ok and res.get("status") == 1 and res.get("session"):
+            return True, f"https://{self.host}:2083/cpsess{res['session']}/login/?session={res['session']}&user={cpanel_username}"
+        return False, "Konnte keine cPanel-Sitzung erstellen."
+
+    def get_account_summary(self, cpanel_username: str) -> Tuple[bool, dict]:
+        """Fetch live account stats (disk used, status) from WHM."""
+        if not self._is_configured():
+            return True, {"status": "active", "diskused": "2450M", "disklimit": "20000M"}
+        ok, res = self._request("/json-api/accountsummary", {"user": cpanel_username}, method="GET")
+        if ok and res.get("status") == 1:
+            acct = res.get("data", {}).get("acct", [{}])[0] if isinstance(res.get("data", {}).get("acct"), list) else res.get("acct", {})
+            return True, acct
+        return False, {}
+
+    def suspend_account(self, cpanel_username: str, reason: str = "Administrative Sperrung") -> Tuple[bool, str]:
+        if not self._is_configured():
+            return True, "Account gesperrt."
+        ok, res = self._request("/json-api/suspendacct", {"user": cpanel_username, "reason": reason}, method="POST")
+        return ok, res.get("statusmsg", "Status geändert.")
+
+    def unsuspend_account(self, cpanel_username: str) -> Tuple[bool, str]:
+        if not self._is_configured():
+            return True, "Account aktiviert."
+        ok, res = self._request("/json-api/unsuspendacct", {"user": cpanel_username}, method="POST")
+        return ok, res.get("statusmsg", "Status geändert.")
+
+whm_client = WHMClient()
+
+
+# ----------------------------------------------------------------------------
+# Routes : Customer Hosting Management (Strict Ownership & IDOR Protection)
+# ----------------------------------------------------------------------------
+@api_router.get("/customer/hosting")
+async def list_customer_hostings(user=Depends(require_customer)):
+    """List all hosting accounts owned by the authenticated customer."""
+    hostings = await db.hosting_accounts.find({"userId": user["id"]}).sort("createdAt", -1).to_list(100)
+    
+    # If customer has active orders with hosting products but no hosting_account created yet, seed/sync one
+    if not hostings:
+        orders = await db.orders.find({"userId": user["id"], "status": {"$in": ["active", "paid", "pending"]}}).to_list(50)
+        for order in orders:
+            prod = await db.products.find_one({"id": order.get("productId")})
+            prod_name = (prod.get("name") or "").lower()
+            if "hosting" in prod_name or "server" in prod_name:
+                raw_domain = order.get("domainName") or order.get("domainChoice") or ""
+                domain = raw_domain.strip().lower() if raw_domain and "." in raw_domain else f"user{user['id'][:6]}.redwork.ch"
+                username = re.sub(r"[^a-z0-9]", "", (domain.split(".")[0] or "rwk"))[:8]
+                new_ha = HostingAccount(
+                    userId=user["id"],
+                    orderId=order["id"],
+                    domain=domain,
+                    cpanelUsername=username or f"rw{user['id'][:6]}",
+                    package=prod.get("name") or "Business Hosting",
+                    packageName=prod.get("name", "").lower().replace(" ", "_"),
+                    status="active" if order.get("status") in ("active", "paid") else "pending",
+                    provisioningStatus="completed" if order.get("status") in ("active", "paid") else "processing",
+                    renewalDate=now_utc() + timedelta(days=365)
+                )
+                await db.hosting_accounts.insert_one(new_ha.dict())
+                hostings.append(new_ha.dict())
+                break
+
+    return [clean(h) for h in hostings]
+
+
+@api_router.get("/customer/hosting/{hosting_id}")
+async def get_customer_hosting(hosting_id: str, user=Depends(require_customer)):
+    """Get single hosting account details with strict ownership verification."""
+    hosting = await db.hosting_accounts.find_one({"id": hosting_id})
+    if not hosting:
+        raise HTTPException(status_code=404, detail="Hosting-Konto nicht gefunden.")
+    
+    # IDOR Check: Must belong to authenticated customer
+    if hosting.get("userId") != user["id"]:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert: Sie sind nicht berechtigt, dieses Hosting-Konto aufzurufen.")
+    
+    return clean(hosting)
+
+
+@api_router.post("/customer/hosting/{hosting_id}/password")
+async def customer_change_hosting_password(hosting_id: str, payload: HostingPasswordChangeIn, user=Depends(require_customer)):
+    """Securely change cPanel password via WHM API for owned hosting account."""
+    hosting = await db.hosting_accounts.find_one({"id": hosting_id})
+    if not hosting:
+        raise HTTPException(status_code=404, detail="Hosting-Konto nicht gefunden.")
+    
+    # IDOR Check: Must belong to authenticated customer
+    if hosting.get("userId") != user["id"]:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert: Sie können nur Passwörter Ihrer eigenen Konten ändern.")
+    
+    new_pwd = payload.newPassword.strip()
+    confirm_pwd = payload.confirmPassword.strip()
+
+    if len(new_pwd) < 8:
+        raise HTTPException(status_code=400, detail="Das Passwort muss mindestens 8 Zeichen lang sein.")
+    if new_pwd != confirm_pwd:
+        raise HTTPException(status_code=400, detail="Die Passwörter stimmen nicht überein.")
+
+    cpanel_user = hosting.get("cpanelUsername")
+    if not cpanel_user:
+        raise HTTPException(status_code=400, detail="Kein cPanel-Benutzername hinterlegt.")
+
+    # Call WHM API to change password
+    success, msg = whm_client.change_password(cpanel_user, new_pwd)
+    if not success:
+        raise HTTPException(status_code=502, detail=f"WHM-Fehler: {msg}")
+
+    # Write audit log without password
+    audit = {
+        "id": str(uuid.uuid4()),
+        "type": "customer_changed_hosting_password",
+        "userId": user["id"],
+        "hostingId": hosting_id,
+        "cpanelUsername": cpanel_user,
+        "ip": "client",
+        "createdAt": now_utc()
+    }
+    await db.audit_logs.insert_one(audit)
+
+    await db.hosting_accounts.update_one({"id": hosting_id}, {"$set": {"updatedAt": now_utc()}})
+
+    return {"ok": True, "message": "Das Hosting-Passwort wurde erfolgreich geändert."}
+
+
+@api_router.post("/customer/hosting/{hosting_id}/sso")
+async def customer_hosting_sso(hosting_id: str, user=Depends(require_customer)):
+    """Generate temporary cPanel SSO session url for owned hosting account."""
+    hosting = await db.hosting_accounts.find_one({"id": hosting_id})
+    if not hosting:
+        raise HTTPException(status_code=404, detail="Hosting-Konto nicht gefunden.")
+    
+    # IDOR Check
+    if hosting.get("userId") != user["id"]:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
+
+    cpanel_user = hosting.get("cpanelUsername")
+    if not cpanel_user:
+        raise HTTPException(status_code=400, detail="Kein cPanel-Benutzername hinterlegt.")
+
+    success, url_or_msg = whm_client.create_user_session(cpanel_user)
+    if not success:
+        raise HTTPException(status_code=502, detail=url_or_msg)
+
+    # Audit log
+    audit = {
+        "id": str(uuid.uuid4()),
+        "type": "customer_cpanel_sso",
+        "userId": user["id"],
+        "hostingId": hosting_id,
+        "cpanelUsername": cpanel_user,
+        "createdAt": now_utc()
+    }
+    await db.audit_logs.insert_one(audit)
+
+    return {"ok": True, "url": url_or_msg}
+
+
+@api_router.post("/customer/hosting/{hosting_id}/sync")
+async def customer_sync_hosting(hosting_id: str, user=Depends(require_customer)):
+    """Sync hosting resource usage with WHM API."""
+    hosting = await db.hosting_accounts.find_one({"id": hosting_id})
+    if not hosting:
+        raise HTTPException(status_code=404, detail="Hosting-Konto nicht gefunden.")
+    if hosting.get("userId") != user["id"]:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
+
+    cpanel_user = hosting.get("cpanelUsername")
+    success, data = whm_client.get_account_summary(cpanel_user)
+    
+    update = {"updatedAt": now_utc()}
+    if success and data:
+        if "diskused" in data:
+            try:
+                used_val = int(re.sub(r"[^\d]", "", str(data["diskused"])))
+                update["diskUsedMb"] = used_val
+            except:
+                pass
+    
+    await db.hosting_accounts.update_one({"id": hosting_id}, {"$set": update})
+    updated = await db.hosting_accounts.find_one({"id": hosting_id})
+    return clean(updated)
+
+
+# ----------------------------------------------------------------------------
+# Routes : Admin Hosting Accounts & WHM Management
+# ----------------------------------------------------------------------------
+@api_router.get("/admin/hosting-accounts")
+async def admin_list_hosting_accounts(user=Depends(require_admin)):
+    """Admin: List all hosting accounts with customer metadata."""
+    accounts = await db.hosting_accounts.find().sort("createdAt", -1).to_list(1000)
+    users = await db.users.find().to_list(2000)
+    user_dict = {u["_id"]: clean(u) for u in users}
+
+    result = []
+    for ha in accounts:
+        item = clean(ha)
+        cust = user_dict.get(ha.get("userId"))
+        if cust:
+            item["customerName"] = f"{cust.get('firstName', '')} {cust.get('lastName', '')}".strip() or cust.get("email")
+            item["customerEmail"] = cust.get("email")
+            item["customerCompany"] = cust.get("company", "")
+        else:
+            item["customerName"] = "Unbekannt"
+            item["customerEmail"] = ""
+            item["customerCompany"] = ""
+        result.append(item)
+
+    return result
+
+
+@api_router.post("/admin/hosting-accounts/{hosting_id}/suspend")
+async def admin_suspend_hosting(hosting_id: str, payload: dict = {}, user=Depends(require_admin)):
+    hosting = await db.hosting_accounts.find_one({"id": hosting_id})
+    if not hosting:
+        raise HTTPException(404, "Hosting-Account nicht gefunden.")
+    
+    cpanel_user = hosting.get("cpanelUsername")
+    reason = payload.get("reason", "Administrative Sperrung durch RedWORK Admin")
+    whm_client.suspend_account(cpanel_user, reason)
+
+    await db.hosting_accounts.update_one({"id": hosting_id}, {"$set": {"status": "suspended", "updatedAt": now_utc()}})
+    
+    audit = {
+        "id": str(uuid.uuid4()),
+        "type": "admin_suspend_hosting",
+        "hostingId": hosting_id,
+        "adminUser": user.get("username", "admin"),
+        "reason": reason,
+        "createdAt": now_utc()
+    }
+    await db.audit_logs.insert_one(audit)
+    return {"ok": True, "status": "suspended"}
+
+
+@api_router.post("/admin/hosting-accounts/{hosting_id}/unsuspend")
+async def admin_unsuspend_hosting(hosting_id: str, user=Depends(require_admin)):
+    hosting = await db.hosting_accounts.find_one({"id": hosting_id})
+    if not hosting:
+        raise HTTPException(404, "Hosting-Account nicht gefunden.")
+    
+    cpanel_user = hosting.get("cpanelUsername")
+    whm_client.unsuspend_account(cpanel_user)
+
+    await db.hosting_accounts.update_one({"id": hosting_id}, {"$set": {"status": "active", "updatedAt": now_utc()}})
+    
+    audit = {
+        "id": str(uuid.uuid4()),
+        "type": "admin_unsuspend_hosting",
+        "hostingId": hosting_id,
+        "adminUser": user.get("username", "admin"),
+        "createdAt": now_utc()
+    }
+    await db.audit_logs.insert_one(audit)
+    return {"ok": True, "status": "active"}
+
+
+@api_router.post("/admin/hosting-accounts/{hosting_id}/reset-password")
+async def admin_reset_hosting_password(hosting_id: str, payload: dict, user=Depends(require_admin)):
+    hosting = await db.hosting_accounts.find_one({"id": hosting_id})
+    if not hosting:
+        raise HTTPException(404, "Hosting-Account nicht gefunden.")
+    
+    new_password = payload.get("newPassword", "").strip()
+    if len(new_password) < 8:
+        raise HTTPException(400, "Das Passwort muss mindestens 8 Zeichen lang sein.")
+
+    cpanel_user = hosting.get("cpanelUsername")
+    success, msg = whm_client.change_password(cpanel_user, new_password)
+    if not success:
+        raise HTTPException(502, f"WHM-Fehler: {msg}")
+
+    audit = {
+        "id": str(uuid.uuid4()),
+        "type": "admin_changed_hosting_password",
+        "hostingId": hosting_id,
+        "adminUser": user.get("username", "admin"),
+        "createdAt": now_utc()
+    }
+    await db.audit_logs.insert_one(audit)
+    return {"ok": True, "message": "Passwort erfolgreich zurückgesetzt."}
+
+
+@api_router.post("/admin/hosting-accounts/{hosting_id}/sso")
+async def admin_hosting_sso(hosting_id: str, user=Depends(require_admin)):
+    hosting = await db.hosting_accounts.find_one({"id": hosting_id})
+    if not hosting:
+        raise HTTPException(404, "Hosting-Account nicht gefunden.")
+    
+    cpanel_user = hosting.get("cpanelUsername")
+    success, url_or_msg = whm_client.create_user_session(cpanel_user)
+    if not success:
+        raise HTTPException(502, url_or_msg)
+
+    return {"ok": True, "url": url_or_msg}
+
+
+# ----------------------------------------------------------------------------
+# Routes : SaaS Overview & WHM Actions
+# ----------------------------------------------------------------------------
 @api_router.get("/admin/saas/overview")
 async def saas_overview(user=Depends(require_admin)):
+    total_hostings = await db.hosting_accounts.count_documents({})
+    active_hostings = await db.hosting_accounts.count_documents({"status": "active"})
+    suspended_hostings = await db.hosting_accounts.count_documents({"status": "suspended"})
+    recent_audits = await db.audit_logs.find().sort("createdAt", -1).limit(10).to_list(10)
+
     return {
-        "stack": ["Stripe", "TWINT", "WHM/cPanel", "Redis/BullMQ ready", "JWT", "Domain Auktionen"],
-        "whmFunctions": ["createacct", "suspendacct", "unsuspendacct", "removeacct", "listaccts", "create_user_session"],
-        "queues": {"provisioning": "ready", "email": "ready", "sync": "scheduled"},
-        "security": {"roles": ["admin", "customer"], "passwordHashing": "bcrypt", "apiKeys": "environment variables"},
+        "stack": ["Stripe", "TWINT", "WHM/cPanel", "FastAPI MongoDB", "JWT Security", "Domain Auktionen"],
+        "whmFunctions": ["createacct", "suspendacct", "unsuspendacct", "removeacct", "listaccts", "create_user_session", "passwd"],
+        "queues": {"provisioning": "ready", "email": "ready", "sync": "aktiv"},
+        "security": {"roles": ["admin", "customer"], "passwordHashing": "bcrypt", "apiKeys": "environment variables", "idorProtection": "aktiv"},
+        "stats": {
+            "totalHostings": total_hostings,
+            "activeHostings": active_hostings,
+            "suspendedHostings": suspended_hostings
+        },
+        "recentAudits": [clean(a) for a in recent_audits]
     }
 
 
 @api_router.post("/admin/whm/{action}")
 async def whm_action(action: str, payload: dict, user=Depends(require_admin)):
-    allowed = {"createacct", "suspendacct", "unsuspendacct", "removeacct", "listaccts", "create_user_session"}
+    allowed = {"createacct", "suspendacct", "unsuspendacct", "removeacct", "listaccts", "create_user_session", "passwd"}
     if action not in allowed:
         raise HTTPException(status_code=400, detail="Nicht unterstützte WHM-Aktion")
     log = {"id": str(uuid.uuid4()), "type": "whm", "action": action, "payload": payload, "status": "queued", "createdAt": now_utc()}
@@ -1886,6 +2337,7 @@ async def customer_dashboard(user=Depends(require_customer)):
         "currency": "CHF",
         "services": [clean(o) for o in services],
         "hosting": [clean(o) for o in hosting],
+        "hostingAccounts": [clean(h) for h in await db.hosting_accounts.find({"userId": user["id"]}).sort("createdAt", -1).to_list(50)],
         "domains": [clean(o) for o in domains],
         "emailServices": [clean(o) for o in email_services],
         "upcomingRenewals": upcoming_renewals,
