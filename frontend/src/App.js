@@ -31,6 +31,7 @@ import MembershipPanel from "./pages/MembershipPanel";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import DashboardProducts from "./pages/DashboardProducts";
 import Profile from "./pages/Profile";
 import Products from "./pages/Products";
 import Support from "./pages/Support";
@@ -119,8 +120,11 @@ function App() {
 
               {/* Customer Routes */}
               <Route path="/dashboard" element={<CustomerRoute><Dashboard /></CustomerRoute>} />
+              <Route path="/dashboard/products" element={<CustomerRoute><DashboardProducts /></CustomerRoute>} />
+              <Route path="/dashboard/products/:productId" element={<CustomerRoute><DashboardProducts /></CustomerRoute>} />
               <Route path="/profile" element={<CustomerRoute><Profile /></CustomerRoute>} />
               <Route path="/products" element={<Products />} />
+              <Route path="/products/:productId" element={<Products />} />
               <Route path="/support" element={<Support />} />
               <Route path="/tickets/:ticketId" element={<TicketDetail />} />
               <Route path="/account" element={<MembershipPanel />} />

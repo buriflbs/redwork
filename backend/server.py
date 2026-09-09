@@ -569,10 +569,21 @@ class ProductIn(BaseModel):
     categoryId: Optional[str] = ""
     name: str
     description: Optional[str] = ""
+    shortDescription: Optional[str] = ""
     unitPrice: float = 0.0
     unit: Optional[str] = "Stk."
     vatRate: Optional[float] = None  # falls None: aus Firma
     sku: Optional[str] = ""
+    billingCycles: List[str] = ["monthly", "yearly"]
+    features: List[str] = []
+    technicalDetails: List[str] = []
+    included: List[str] = []
+    status: str = "active"  # active | inactive | coming_soon
+    popular: bool = False
+    recommended: bool = False
+    badge: Optional[str] = ""
+    image: Optional[str] = ""
+    availability: Optional[str] = "available"
     order: int = 0
 
 
@@ -667,6 +678,12 @@ class UserUpdateIn(BaseModel):
     phone: Optional[str] = None
 
 
+class AdminCustomerUpdateIn(UserUpdateIn):
+    email: Optional[EmailStr] = None
+    emailVerified: Optional[bool] = None
+    deleted: Optional[bool] = None
+
+
 class PasswordResetRequestIn(BaseModel):
     email: EmailStr
 
@@ -740,8 +757,15 @@ def user_doc_to_response(doc: dict) -> dict:
 # ----- Order (Customer Orders) -----
 class OrderIn(BaseModel):
     productId: str
-    duration: str  # "monthly" | "yearly"
+    duration: str  # "monthly" | "yearly" | "two_years"
     quantity: int = 1
+    domainChoice: Optional[str] = ""  # existing | new | later
+    domainName: Optional[str] = ""
+    addons: List[str] = []
+
+
+class OrderStatusIn(BaseModel):
+    status: str
 
 
 class Order(OrderIn):
@@ -749,6 +773,10 @@ class Order(OrderIn):
     userId: str
     status: str = "pending"  # pending | paid | active | cancelled | expired
     total: float = 0.0
+    subtotal: float = 0.0
+    vatAmount: float = 0.0
+    currency: str = "CHF"
+    reference: str = Field(default_factory=lambda: "RW-" + uuid.uuid4().hex[:6].upper())
     createdAt: datetime = Field(default_factory=now_utc)
     activatedAt: Optional[datetime] = None
 
@@ -1463,8 +1491,7 @@ async def verify_email(token: str):
 # ----------------------------------------------------------------------------
 @api_router.get("/products")
 async def list_products():
-    # Get products with category
-    products = await db.products.find().sort("order", 1).to_list(1000)
+    products = await db.products.find({"status": {"$ne": "inactive"}}).sort("order", 1).to_list(1000)
     categories = await db.product_categories.find().to_list(100)
     cat_dict = {c["id"]: c["name"] for c in categories}
     
@@ -1475,26 +1502,49 @@ async def list_products():
     return products
 
 
+@api_router.get("/products/{product_id}")
+async def get_product(product_id: str):
+    product = await db.products.find_one({"id": product_id, "status": {"$ne": "inactive"}})
+    if not product:
+        raise HTTPException(404, "Produkt nicht gefunden")
+    category = await db.product_categories.find_one({"id": product.get("categoryId", "")})
+    clean(product)
+    product["categoryName"] = category.get("name", "") if category else ""
+    return product
+
+
 # ----------------------------------------------------------------------------
 # Routes : Customer Orders
 # ----------------------------------------------------------------------------
 @api_router.post("/orders", response_model=Order)
 async def create_order(payload: OrderIn, user=Depends(require_customer)):
-    product = await db.products.find_one({"id": payload.productId})
+    product = await db.products.find_one({"id": payload.productId, "status": "active"})
     if not product:
-        raise HTTPException(404, "Produkt nicht gefunden")
+        raise HTTPException(404, "Produkt nicht verfügbar")
+    if payload.duration not in (product.get("billingCycles") or ["monthly", "yearly"]):
+        raise HTTPException(status_code=400, detail="Diese Laufzeit ist für das Produkt nicht verfügbar")
     
-    price = product["unitPrice"]
+    price = float(product["unitPrice"])
     if payload.duration == "yearly":
         price *= 12 * 0.9  # 10% discount for yearly
+    elif payload.duration == "two_years":
+        price *= 24 * 0.85
     
-    total = price * payload.quantity
+    subtotal = price * payload.quantity
+    vat_rate = float(product.get("vatRate") if product.get("vatRate") is not None else 8.1)
+    vat_amount = round(subtotal * vat_rate / 100, 2)
+    total = round(subtotal + vat_amount, 2)
     
     order = Order(
         productId=payload.productId,
         duration=payload.duration,
         quantity=payload.quantity,
+        domainChoice=payload.domainChoice,
+        domainName=payload.domainName,
+        addons=payload.addons,
         userId=user["id"],
+        subtotal=round(subtotal, 2),
+        vatAmount=vat_amount,
         total=total
     )
     
@@ -1651,35 +1701,89 @@ async def add_ticket_reply(ticket_id: str, payload: TicketReplyIn, user=Depends(
 # ----------------------------------------------------------------------------
 @api_router.get("/dashboard")
 async def customer_dashboard(user=Depends(require_customer)):
-    # Active orders
-    active_orders = await db.orders.find({"userId": user["id"], "status": {"$in": ["active", "paid"]}}).sort("createdAt", -1).to_list(10)
-    
-    # Recent orders
+    active_orders = await db.orders.find({"userId": user["id"], "status": {"$in": ["active", "paid"]}}).sort("createdAt", -1).to_list(50)
     recent_orders = await db.orders.find({"userId": user["id"]}).sort("createdAt", -1).limit(5).to_list(5)
-    
-    # Open tickets
     open_tickets = await db.tickets.find({"userId": user["id"], "status": {"$nin": ["closed"]}}).sort("updatedAt", -1).to_list(10)
-    
-    # Invoices
     invoices = await db.invoices.find({"userId": user["id"], "type": "invoice"}).sort("createdAt", -1).to_list(20)
-    
-    # Recent activities (simplified)
+    products = await db.products.find().to_list(1000)
+    product_map = {p["id"]: clean(p) for p in products}
+
+    for order in active_orders + recent_orders:
+        product = product_map.get(order.get("productId"))
+        if product:
+            order["productName"] = product.get("name", "")
+            order["productDescription"] = product.get("description", "")
+            order["productSku"] = product.get("sku", "")
+            order["productCategoryId"] = product.get("categoryId", "")
+
+    paid_statuses = {"sent", "overdue", "reminder_sent", "dunning_sent", "collection_warning"}
+    open_invoices = [inv for inv in invoices if inv.get("status") in paid_statuses]
+    unpaid_total = round(sum(float(inv.get("total") or 0) for inv in open_invoices), 2)
+    balance = round(sum(float(inv.get("total") or 0) for inv in invoices if inv.get("status") == "paid") - unpaid_total, 2)
+
     activities = []
     for o in recent_orders[:3]:
-        activities.append({"type": "order", "message": f"Bestellung {o['id']} erstellt", "date": o["createdAt"]})
+        label = o.get("productName") or f"Bestellung {o['id']}"
+        activities.append({"type": "order", "message": f"{label} bestellt", "date": o["createdAt"]})
     for t in open_tickets[:2]:
         activities.append({"type": "ticket", "message": f"Ticket '{t['subject']}' aktualisiert", "date": t["updatedAt"]})
     for inv in invoices[:2]:
         activities.append({"type": "invoice", "message": f"Rechnung {inv['number']} erstellt", "date": inv["createdAt"]})
-    
     activities.sort(key=lambda x: x["date"], reverse=True)
+
+    service_keywords = ("hosting", "domain", "e-mail", "email", "wartung", "seo", "support", "webdesign", "webentwicklung", "software")
+    services = []
+    hosting = []
+    domains = []
+    email_services = []
+    for order in active_orders:
+        name = (order.get("productName") or "").lower()
+        description = (order.get("productDescription") or "").lower()
+        text = f"{name} {description}"
+        if any(keyword in text for keyword in service_keywords):
+            services.append(order)
+        if "hosting" in text:
+            hosting.append(order)
+        if "domain" in text:
+            domains.append(order)
+        if "e-mail" in text or "email" in text:
+            email_services.append(order)
+
+    upcoming = []
+    for inv in open_invoices:
+        if inv.get("dueDate"):
+            upcoming.append({"type": "invoice", "label": f"Rechnung {inv.get('number', '')} fällig", "date": inv["dueDate"], "status": inv.get("status")})
+    upcoming.sort(key=lambda item: item.get("date") or "")
+
+    notifications = []
+    overdue_count = len([inv for inv in invoices if inv.get("status") in {"overdue", "dunning_sent", "collection_warning"}])
+    if overdue_count:
+        notifications.append({"type": "warning", "message": f"{overdue_count} Rechnung(en) sind ueberfaellig."})
+    if open_tickets:
+        notifications.append({"type": "info", "message": f"{len(open_tickets)} offene Support-Anfrage(n)."})
     
     return {
+        "customer": user,
         "activeOrders": [clean(o) for o in active_orders],
         "recentOrders": [clean(o) for o in recent_orders],
         "openTickets": [clean(o) for o in open_tickets],
         "invoices": [clean(inv) for inv in invoices],
-        "recentActivities": activities[:5]
+        "openInvoices": [clean(inv) for inv in open_invoices],
+        "unpaidInvoiceTotal": unpaid_total,
+        "balance": balance,
+        "currency": "CHF",
+        "services": [clean(o) for o in services],
+        "hosting": [clean(o) for o in hosting],
+        "domains": [clean(o) for o in domains],
+        "emailServices": [clean(o) for o in email_services],
+        "projects": [],
+        "messages": [],
+        "documents": [],
+        "reviews": [],
+        "complaints": [],
+        "notifications": notifications,
+        "upcoming": upcoming[:8],
+        "recentActivities": activities[:8]
     }
 
 
@@ -1912,21 +2016,31 @@ async def get_customer(customer_id: str, user=Depends(require_admin)):
 
 
 @api_router.put("/admin/customers/{customer_id}")
-async def update_customer(customer_id: str, payload: UserUpdateIn, user=Depends(require_admin)):
+async def update_customer(customer_id: str, payload: AdminCustomerUpdateIn, user=Depends(require_admin)):
     """Update customer profile."""
     customer = await db.users.find_one({"_id": customer_id, "deleted": False})
     if not customer:
         raise HTTPException(404, "Kunde nicht gefunden")
     
     update_data = {}
-    if payload.firstName:
+    if payload.firstName is not None:
         update_data["firstName"] = payload.firstName
-    if payload.lastName:
+    if payload.lastName is not None:
         update_data["lastName"] = payload.lastName
+    if payload.email is not None:
+        new_email = str(payload.email).strip().lower()
+        duplicate = await db.users.find_one({"email": new_email, "_id": {"$ne": customer_id}, "deleted": False})
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Diese E-Mail-Adresse wird bereits verwendet")
+        update_data["email"] = new_email
     if payload.company is not None:
         update_data["company"] = payload.company
     if payload.phone is not None:
         update_data["phone"] = payload.phone
+    if payload.emailVerified is not None:
+        update_data["emailVerified"] = payload.emailVerified
+    if payload.deleted is not None:
+        update_data["deleted"] = payload.deleted
     
     if update_data:
         await db.users.update_one({"_id": customer_id}, {"$set": update_data})
@@ -1960,7 +2074,7 @@ async def list_orders(user=Depends(require_admin)):
     orders = await db.orders.find().sort("createdAt", -1).to_list(1000)
     users = await db.users.find().to_list(1000)
     products = await db.products.find().to_list(1000)
-    user_dict = {u["id"]: f"{u['firstName']} {u['lastName']}" for u in users}
+    user_dict = {u.get("_id"): f"{u.get('firstName', '')} {u.get('lastName', '')}".strip() for u in users}
     prod_dict = {p["id"]: p["name"] for p in products}
     
     for o in orders:
@@ -1972,7 +2086,10 @@ async def list_orders(user=Depends(require_admin)):
 
 
 @api_router.patch("/admin/orders/{order_id}")
-async def update_order(order_id: str, status: str, user=Depends(require_admin)):
+async def update_order(order_id: str, payload: OrderStatusIn, user=Depends(require_admin)):
+    status = payload.status
+    if status not in {"pending", "paid", "active", "cancelled", "expired", "processing", "completed"}:
+        raise HTTPException(status_code=400, detail="Ungültiger Bestellstatus")
     await db.orders.update_one({"id": order_id}, {"$set": {"status": status}})
     return {"message": "Bestellung aktualisiert"}
 
@@ -1984,7 +2101,7 @@ async def update_order(order_id: str, status: str, user=Depends(require_admin)):
 async def list_tickets(user=Depends(require_admin)):
     tickets = await db.tickets.find().sort("updatedAt", -1).to_list(1000)
     users = await db.users.find().to_list(1000)
-    user_dict = {u["id"]: f"{u['firstName']} {u['lastName']}" for u in users}
+    user_dict = {u.get("_id"): f"{u.get('firstName', '')} {u.get('lastName', '')}".strip() for u in users}
     
     for t in tickets:
         clean(t)
@@ -2001,7 +2118,7 @@ async def get_admin_ticket(ticket_id: str, user=Depends(require_admin)):
     
     replies = await db.ticket_replies.find({"ticketId": ticket_id}).sort("createdAt", 1).to_list(1000)
     users = await db.users.find().to_list(1000)
-    user_dict = {u["id"]: f"{u['firstName']} {u['lastName']}" for u in users}
+    user_dict = {u.get("_id"): f"{u.get('firstName', '')} {u.get('lastName', '')}".strip() for u in users}
     
     clean(ticket)
     ticket["userName"] = user_dict.get(ticket["userId"], "")
@@ -2033,7 +2150,7 @@ async def add_admin_ticket_reply(ticket_id: str, payload: TicketReplyIn, user=De
     await db.tickets.update_one({"id": ticket_id}, {"$set": {"updatedAt": now_utc(), "status": new_status}})
     
     # Send email notification to customer
-    customer = await db.users.find_one({"id": ticket["userId"]})
+    customer = await db.users.find_one({"_id": ticket["userId"]})
     if customer and customer.get("email"):
         subject = f"Update zu Ihrem Support-Ticket #{ticket_id}"
         body = f"Hallo {customer['firstName']},\n\nwir haben auf Ihr Support-Ticket geantwortet.\n\n{payload.message}\n\nSie können die Details in Ihrem Kundenbereich einsehen.\n\nFreundliche Grüsse\nIhr redwork.ch-Team"
