@@ -105,19 +105,19 @@ export default function FloatingCTA() {
             <div className="relative flex items-center justify-between px-3.5 py-2.5 rounded-[15px] bg-[#0c101a] group-hover/btn:bg-transparent transition-colors">
               <span className="flex items-center gap-2 text-[12.5px] sm:text-[13px] font-black text-white">
                 <FileText size={15} className="text-[#FFC107]" />
-                <span>Teklif Alın / Angebot</span>
+                <span>Angebot anfordern</span>
               </span>
               <ArrowRight size={14} className="text-white group-hover/btn:translate-x-1 transition-transform" />
             </div>
           </button>
 
-          {/* Secondary Action - Bize Yazın / Kontakt */}
+          {/* Secondary Action - Kontakt aufnehmen */}
           <button
             onClick={openContact}
             className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white/80 hover:text-white text-[11.5px] font-bold transition-all cursor-pointer"
           >
             <MessageSquareQuote size={13} className="text-[#1E88E5]" />
-            <span>Bize Yazın / Kontakt</span>
+            <span>Nachricht senden</span>
           </button>
 
           {/* Trust Micro-Tag */}

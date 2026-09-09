@@ -100,8 +100,8 @@ const PROCESS_STEPS = [
 ];
 
 /**
- * 6 Core Pillars from reference (# Nasıl Yapıyoruz / Proje Özellikleri)
- * Translated into professional German for REDWORK.CH
+ * 6 Core Project Pillars & Standards
+ * High-end Swiss quality standards for REDWORK.CH
  */
 const PROJECT_PILLARS = [
   {
@@ -299,7 +299,7 @@ export default function HowWeWork() {
           </div>
         </div>
 
-        {/* 6 High-Impact Project Excellence Pillars (Inspired by Web Tasarım Sistemleri reference) */}
+        {/* 6 High-Impact Project Excellence Pillars */}
         <div className="mb-20 sm:mb-28">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <div className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-[#E63946] mb-2">
@@ -371,7 +371,7 @@ export default function HowWeWork() {
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold text-base transition-colors cursor-pointer"
               >
                 <MessageSquare size={18} className="text-[#1E88E5]" />
-                <span>Bize Yazın / Kontakt</span>
+                <span>Kontakt aufnehmen</span>
               </button>
             </div>
           </div>

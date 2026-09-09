@@ -1,0 +1,6 @@
+FloatingCTA.jsx:108 [chars: ['ı']] -> <span>Teklif Alın / Angebot</span>
+FloatingCTA.jsx:114 [chars: ['ı']] -> {/* Secondary Action - Bize Yazın / Kontakt */}
+FloatingCTA.jsx:120 [chars: ['ı']] -> <span>Bize Yazın / Kontakt</span>
+HowWeWork.jsx:103 [chars: ['ı', 'ı']] -> * 6 Core Pillars from reference (# Nasıl Yapıyoruz / Proje Özellikleri)
+HowWeWork.jsx:302 [chars: ['ı']] -> {/* 6 High-Impact Project Excellence Pillars (Inspired by Web Tasarım Sistemleri reference) */}
+HowWeWork.jsx:374 [chars: ['ı']] -> <span>Bize Yazın / Kontakt</span>

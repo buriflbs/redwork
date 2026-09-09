@@ -1,0 +1,5 @@
+FloatingCTA.jsx:108 -> <span>Teklif Alın / Angebot</span>
+FloatingCTA.jsx:114 -> {/* Secondary Action - Bize Yazın / Kontakt */}
+FloatingCTA.jsx:120 -> <span>Bize Yazın / Kontakt</span>
+HowWeWork.jsx:103 -> * 6 Core Pillars from reference (# Nasıl Yapıyoruz / Proje Özellikleri)
+HowWeWork.jsx:374 -> <span>Bize Yazın / Kontakt</span>
