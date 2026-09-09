@@ -22,28 +22,35 @@ import {
 } from "lucide-react";
 import Logo from "../Logo";
 
-export const CUSTOMER_NAV_ITEMS = [
+export const PRIMARY_NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
   { key: "services", label: "Meine Services", to: "/dashboard?tab=services", icon: Server },
-  { key: "licenses", label: "Lizenzen", to: "/dashboard?tab=licenses", icon: KeyRound },
-  { key: "servers", label: "Server-Steuerung", to: "/dashboard?tab=servers", icon: Terminal },
   { key: "domains", label: "Meine Domains", to: "/dashboard?tab=domains", icon: Globe },
-  { key: "backorder", label: "Backorder", to: "/dashboard?tab=backorder", icon: History },
   { key: "invoices", label: "Rechnungen", to: "/dashboard?tab=invoices", icon: FileText },
-  { key: "offers", label: "Offerten", to: "/dashboard?tab=offers", icon: FileSpreadsheet },
   { key: "support", label: "Support", to: "/support", icon: Headphones },
+];
+
+export const MORE_NAV_ITEMS = [
+  { key: "servers", label: "Server-Steuerung", to: "/dashboard?tab=servers", icon: Terminal },
+  { key: "licenses", label: "Lizenzen", to: "/dashboard?tab=licenses", icon: KeyRound },
+  { key: "backorder", label: "Backorder", to: "/dashboard?tab=backorder", icon: History },
+  { key: "offers", label: "Offerten", to: "/dashboard?tab=offers", icon: FileSpreadsheet },
   { key: "affiliate", label: "Partnerprogramm", to: "/dashboard?tab=affiliate", icon: Users },
 ];
+
+export const CUSTOMER_NAV_ITEMS = [...PRIMARY_NAV_ITEMS, ...MORE_NAV_ITEMS];
 
 export default function CustomerShell({ children, active = "dashboard", unreadCount = 0, notifications = [] }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const dropdownRef = useRef(null);
   const notifRef = useRef(null);
+  const moreMenuRef = useRef(null);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -54,6 +61,9 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
       if (notifRef.current && !notifRef.current.contains(event.target)) {
         setNotificationsOpen(false);
       }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setMoreMenuOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -61,6 +71,7 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
 
   const searchParams = new URLSearchParams(location.search);
   const currentTab = searchParams.get("tab") || (location.pathname === "/dashboard" ? "dashboard" : "");
+  const isMoreActive = MORE_NAV_ITEMS.some((item) => currentTab && item.key === currentTab);
 
   const firstName = user?.firstName || user?.name || "Kunde";
   const firstInitial = firstName.charAt(0).toUpperCase();
@@ -79,8 +90,8 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
           </div>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden xl:flex items-center gap-1.5 overflow-x-auto py-1">
-            {CUSTOMER_NAV_ITEMS.map((item) => {
+          <nav className="hidden xl:flex items-center gap-1 shrink-0">
+            {PRIMARY_NAV_ITEMS.map((item) => {
               const isCurrent =
                 (item.key === "dashboard" && location.pathname === "/dashboard" && (!currentTab || currentTab === "dashboard")) ||
                 (currentTab && item.key === currentTab) ||
@@ -100,6 +111,45 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
                 </Link>
               );
             })}
+
+            {/* Dropdown Menu for Additional Services */}
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                type="button"
+                onClick={() => setMoreMenuOpen((prev) => !prev)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
+                  isMoreActive
+                    ? "bg-[#FFF4ED] text-[#FF7A00] font-bold shadow-[inset_0_0_0_1px_rgba(255,122,0,0.15)]"
+                    : "text-slate-600 hover:text-[#0F172A] hover:bg-slate-50"
+                }`}
+              >
+                <span>Weitere Dienste</span>
+                <ChevronDown className={`h-4 w-4 transition-transform duration-150 ${moreMenuOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {moreMenuOpen && (
+                <div className="absolute left-0 mt-2 w-56 rounded-2xl border border-slate-100 bg-white p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
+                  {MORE_NAV_ITEMS.map((item) => {
+                    const isSubCurrent = currentTab && item.key === currentTab;
+                    return (
+                      <Link
+                        key={item.key}
+                        to={item.to}
+                        onClick={() => setMoreMenuOpen(false)}
+                        className={`flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-xl transition ${
+                          isSubCurrent
+                            ? "bg-[#FFF4ED] text-[#FF7A00] font-bold"
+                            : "text-slate-700 hover:bg-slate-50 hover:text-[#FF7A00]"
+                        }`}
+                      >
+                        <item.icon className="h-4 w-4 text-slate-400" />
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </nav>
 
           {/* Right Header Area: Notifications & User Avatar */}
