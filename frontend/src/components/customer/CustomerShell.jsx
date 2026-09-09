@@ -1,98 +1,231 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useRef, useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { BarChart3, ChevronRight, CreditCard, Globe2, Headphones, Home, LogOut, Package, Server, ShieldCheck, UserRound, WalletCards } from "lucide-react";
-import { Button } from "../ui/button";
+import {
+  Bell,
+  ChevronDown,
+  LayoutDashboard,
+  Server,
+  KeyRound,
+  Terminal,
+  Globe,
+  History,
+  FileText,
+  FileSpreadsheet,
+  Headphones,
+  Users,
+  LogOut,
+  User,
+  Shield,
+  Menu,
+  X
+} from "lucide-react";
+import Logo from "../Logo";
 
-const menu = [
-  { label: "Müşteri Paneli", to: "/dashboard", icon: Home },
-  {
-    label: "Hizmetlerim",
-    to: "/dashboard/products",
-    icon: Server,
-    children: [
-      ["Web Hosting", "/dashboard/products?category=web-hosting"],
-      ["Reseller Hosting", "/dashboard/products?category=reseller-hosting"],
-      ["Premium VDS & VPS", "/dashboard/products?category=premium-vds-vps"],
-      ["Kiralık Sunucular", "/dashboard/products?category=kiralik-sunucular"],
-    ],
-  },
-  { label: "Domainlerim", to: "/dashboard#domains", icon: Globe2 },
-  { label: "Faturalar", to: "/dashboard#rechnungen", icon: CreditCard },
-  { label: "Destek", to: "/support", icon: Headphones },
-  { label: "Hesabım", to: "/profile", icon: UserRound },
-  { label: "Raporlar", to: "/dashboard#activity", icon: BarChart3 },
+export const CUSTOMER_NAV_ITEMS = [
+  { key: "dashboard", label: "Panelim", to: "/dashboard", icon: LayoutDashboard },
+  { key: "services", label: "Hizmetlerim", to: "/dashboard?tab=services", icon: Server },
+  { key: "licenses", label: "Lisanslarım", to: "/dashboard?tab=licenses", icon: KeyRound },
+  { key: "servers", label: "Sunucu Kontrol", to: "/dashboard?tab=servers", icon: Terminal },
+  { key: "domains", label: "Domainlerim", to: "/dashboard?tab=domains", icon: Globe },
+  { key: "backorder", label: "Backorder", to: "/dashboard?tab=backorder", icon: History },
+  { key: "invoices", label: "Faturalar", to: "/dashboard?tab=invoices", icon: FileText },
+  { key: "offers", label: "Teklifler", to: "/dashboard?tab=offers", icon: FileSpreadsheet },
+  { key: "support", label: "Destek", to: "/support", icon: Headphones },
+  { key: "affiliate", label: "Ortaklık", to: "/dashboard?tab=affiliate", icon: Users },
 ];
 
-export default function CustomerShell({ children, active = "dashboard" }) {
-  const { logout } = useAuth();
+export default function CustomerShell({ children, active = "dashboard", unreadCount = 0 }) {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const dropdownRef = useRef(null);
+  const notifRef = useRef(null);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setUserDropdownOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setNotificationsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const searchParams = new URLSearchParams(location.search);
+  const currentTab = searchParams.get("tab") || (location.pathname === "/dashboard" ? "dashboard" : "");
+
+  const firstName = user?.firstName || user?.name || "Müşteri";
+  const firstInitial = firstName.charAt(0).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#f6f7fb] text-[#0d1b3d]">
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[280px] bg-[#102452] text-white lg:block">
-        <div className="flex h-24 items-center px-10">
-          <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E63946] font-black">R</div>
-            <div>
-              <p className="text-xl font-black leading-none">REDWORK</p>
-              <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-white/50">Digital Services</p>
-            </div>
-          </Link>
-        </div>
-        <nav className="mt-14 space-y-1 px-3">
-          {menu.map((item) => {
-            const Icon = item.icon;
-            const isActive = active === item.label || (active === "products" && item.label === "Hizmetlerim") || (active === "dashboard" && item.label === "Müşteri Paneli");
-            return (
-              <div key={item.label}>
-                <Link to={item.to} className={`flex items-center justify-between rounded-l-full px-5 py-3 text-sm font-bold transition ${isActive ? "bg-white text-[#102452]" : "text-white/85 hover:bg-white/10 hover:text-white"}`}>
-                  <span className="flex items-center gap-3"><Icon className="h-5 w-5" /> {item.label}</span>
-                  {item.children && <ChevronRight className="h-4 w-4" />}
-                </Link>
-                {item.children && isActive && (
-                  <div className="ml-9 mt-1 space-y-1 pb-2">
-                    {item.children.map(([label, to]) => (
-                      <Link key={label} to={to} className="block rounded-lg px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/10 hover:text-white">{label}</Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </nav>
-        <div className="absolute bottom-8 left-6 right-6 border-t border-white/10 pt-5">
-          <p className="px-4 text-xs font-semibold text-white/55">REDWORK Panel</p>
-          <Button variant="outline" onClick={logout} className="mt-4 w-full border-white/15 bg-white/5 text-white hover:bg-white/10">
-            <LogOut className="mr-2 h-4 w-4" /> Abmelden
-          </Button>
-        </div>
-      </aside>
+    <div className="min-h-screen bg-[#F4F6FB] text-[#0F172A] font-sans antialiased">
+      {/* Top Horizontal Navbar */}
+      <header className="sticky top-0 z-50 bg-white border-b border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+        <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+          
+          {/* Brand Logo */}
+          <div className="flex items-center gap-6">
+            <Link to="/dashboard" className="flex items-center gap-2 group">
+              <Logo size="md" inverted={true} className="h-8 w-auto transition-transform duration-200 group-hover:scale-105" />
+            </Link>
+          </div>
 
-      <div className="hidden h-24 bg-[#102452] lg:block lg:pl-[280px]">
-        <div className="flex h-full items-center justify-end px-8">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-[#102452] shadow-lg">
-            <ShieldCheck className="h-5 w-5" />
+          {/* Desktop Navigation Links */}
+          <nav className="hidden xl:flex items-center gap-1.5 overflow-x-auto py-1">
+            {CUSTOMER_NAV_ITEMS.map((item) => {
+              const isCurrent =
+                (item.key === "dashboard" && location.pathname === "/dashboard" && (!currentTab || currentTab === "dashboard")) ||
+                (currentTab && item.key === currentTab) ||
+                (item.to === "/support" && location.pathname.startsWith("/support"));
+
+              return (
+                <Link
+                  key={item.key}
+                  to={item.to}
+                  className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
+                    isCurrent
+                      ? "bg-[#FFF4ED] text-[#FF7A00] font-bold shadow-[inset_0_0_0_1px_rgba(255,122,0,0.15)]"
+                      : "text-slate-600 hover:text-[#0F172A] hover:bg-slate-50"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Right Header Area: Notifications & User Avatar */}
+          <div className="flex items-center gap-3">
+            
+            {/* Notification Bell */}
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={() => setNotificationsOpen((prev) => !prev)}
+                className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-slate-50/70 text-slate-600 hover:bg-white hover:border-slate-300 hover:text-[#0F172A] transition shadow-sm"
+                aria-label="Bildirimler"
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-[#FF7A00] ring-2 ring-white" />
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-3 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-2">
+                    <span className="font-bold text-sm text-[#0F172A]">Bildirimler</span>
+                    <span className="text-xs text-slate-400">Son Hareketler</span>
+                  </div>
+                  <div className="py-4 text-center text-xs text-slate-400">
+                    Yeni okunmamış bildiriminiz yok.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* User Profile Pill / Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setUserDropdownOpen((prev) => !prev)}
+                className="flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-white pl-1.5 pr-4 py-1.5 text-sm font-semibold text-[#0F172A] shadow-sm hover:border-slate-300 hover:bg-slate-50 transition"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FF7A00] text-white font-bold text-xs shadow-[0_2px_8px_rgba(255,122,0,0.3)]">
+                  {firstInitial}
+                </div>
+                <span className="hidden sm:inline-block max-w-[120px] truncate">{firstName}</span>
+                <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-150 ${userDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {userDropdownOpen && (
+                <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-slate-100 bg-white p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Oturum Açıldı</p>
+                    <p className="text-sm font-bold text-[#0F172A] truncate">{user?.email || "Hesap"}</p>
+                  </div>
+                  
+                  <Link
+                    to="/dashboard?tab=account"
+                    onClick={() => setUserDropdownOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-xl text-slate-700 hover:bg-slate-50 hover:text-[#FF7A00] transition"
+                  >
+                    <User className="h-4 w-4 text-slate-400" /> Hesabım & Profil
+                  </Link>
+
+                  <Link
+                    to="/dashboard?tab=security"
+                    onClick={() => setUserDropdownOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-xl text-slate-700 hover:bg-slate-50 hover:text-[#FF7A00] transition"
+                  >
+                    <Shield className="h-4 w-4 text-slate-400" /> Güvenlik & Şifre
+                  </Link>
+
+                  <div className="my-1 border-t border-slate-100" />
+
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      logout();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-xl text-red-600 hover:bg-red-50 transition"
+                  >
+                    <LogOut className="h-4 w-4 text-red-500" /> Çıkış Yap
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Navigation Toggle Button */}
+            <button
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              className="xl:hidden flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              aria-label="Menüyü Aç"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
           </div>
         </div>
-      </div>
 
-      <main className="pb-24 lg:pl-[280px]">
-        <div className="mx-auto max-w-[1640px] px-4 py-5 sm:px-6 lg:px-9">
-          {children}
-        </div>
+        {/* Mobile Nav Dropdown */}
+        {mobileMenuOpen && (
+          <div className="xl:hidden border-t border-slate-100 bg-white px-4 py-4 shadow-xl">
+            <div className="grid grid-cols-2 gap-2">
+              {CUSTOMER_NAV_ITEMS.map((item) => {
+                const isCurrent =
+                  (item.key === "dashboard" && location.pathname === "/dashboard" && (!currentTab || currentTab === "dashboard")) ||
+                  (currentTab && item.key === currentTab) ||
+                  (item.to === "/support" && location.pathname.startsWith("/support"));
+
+                return (
+                  <Link
+                    key={item.key}
+                    to={item.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition ${
+                      isCurrent ? "bg-[#FFF4ED] text-[#FF7A00]" : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* Main Page Content */}
+      <main className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+        {children}
       </main>
-
-      <nav className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 border-t border-slate-200 bg-white px-2 py-2 shadow-2xl lg:hidden">
-        {menu.slice(0, 5).map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link key={item.label} to={item.to} className="flex flex-col items-center gap-1 text-[11px] font-semibold text-[#102452]">
-              <Icon className="h-5 w-5" />
-              {item.label.replace("Müşteri Paneli", "Panel")}
-            </Link>
-          );
-        })}
-      </nav>
     </div>
   );
 }

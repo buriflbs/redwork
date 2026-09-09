@@ -676,6 +676,13 @@ class UserUpdateIn(BaseModel):
     lastName: Optional[str] = None
     company: Optional[str] = None
     phone: Optional[str] = None
+    address: Optional[str] = None
+    zip: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    vatNumber: Optional[str] = None
+    currentPassword: Optional[str] = None
+    newPassword: Optional[str] = None
 
 
 class AdminCustomerUpdateIn(UserUpdateIn):
@@ -747,6 +754,11 @@ def user_doc_to_response(doc: dict) -> dict:
         "lastName": doc.get("lastName"),
         "company": doc.get("company"),
         "phone": doc.get("phone"),
+        "address": doc.get("address", ""),
+        "zip": doc.get("zip", ""),
+        "city": doc.get("city", ""),
+        "country": doc.get("country", "CH"),
+        "vatNumber": doc.get("vatNumber", ""),
         "emailVerified": doc.get("emailVerified", False),
         "createdAt": doc.get("createdAt"),
         "lastLogin": doc.get("lastLogin"),
@@ -940,6 +952,33 @@ async def require_customer(token: Optional[str] = Depends(oauth2_scheme)):
         raise HTTPException(status_code=401, detail="Benutzer nicht gefunden")
     
     return user_doc_to_response(user)
+
+
+async def require_user(token: Optional[str] = Depends(oauth2_scheme)):
+    """Validate token for either admin or customer."""
+    if not token:
+        raise HTTPException(status_code=401, detail="Nicht authentifiziert")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        role = payload.get("role")
+        sub = payload.get("sub")
+        if role == "admin":
+            admin_creds = await get_admin_credentials()
+            return {
+                "id": "admin",
+                "username": admin_creds.get("username", sub),
+                "email": admin_creds.get("email", "admin@redwork.ch"),
+                "role": "admin"
+            }
+        elif role == "customer":
+            user = await db.users.find_one({"_id": sub})
+            if not user or _is_deleted_user(user):
+                raise HTTPException(status_code=401, detail="Benutzer nicht gefunden")
+            return user_doc_to_response(user)
+        else:
+            raise HTTPException(status_code=403, detail="Unberechtigter Zugriff")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
 
 
 def clean(d):
@@ -1378,6 +1417,10 @@ async def customer_me(user: dict = Depends(require_customer)):
 @api_router.put("/auth/profile")
 async def update_profile(payload: UserUpdateIn, user: dict = Depends(require_customer)):
     """Update customer profile."""
+    db_user = await db.users.find_one({"_id": user["id"]})
+    if not db_user:
+        raise HTTPException(404, "Kunde nicht gefunden")
+
     update_data = {}
     if payload.firstName is not None:
         update_data["firstName"] = payload.firstName.strip()
@@ -1387,10 +1430,30 @@ async def update_profile(payload: UserUpdateIn, user: dict = Depends(require_cus
         update_data["company"] = payload.company.strip()
     if payload.phone is not None:
         update_data["phone"] = payload.phone.strip()
-    
+    if payload.address is not None:
+        update_data["address"] = payload.address.strip()
+    if payload.zip is not None:
+        update_data["zip"] = payload.zip.strip()
+    if payload.city is not None:
+        update_data["city"] = payload.city.strip()
+    if payload.country is not None:
+        update_data["country"] = payload.country.strip()
+    if payload.vatNumber is not None:
+        update_data["vatNumber"] = payload.vatNumber.strip()
+
+    # Password change
+    if payload.newPassword:
+        if len(payload.newPassword) < 8:
+            raise HTTPException(400, "Yeni şifre en az 8 karakter olmalıdır")
+        if not payload.currentPassword:
+            raise HTTPException(400, "Mevcut şifrenizi girmelisiniz")
+        if not verify_password(payload.currentPassword, _password_hash_from_user(db_user)):
+            raise HTTPException(400, "Mevcut şifreniz hatalı")
+        update_data["passwordHash"] = hash_password(payload.newPassword)
+
     if update_data:
         await db.users.update_one({"_id": user["id"]}, {"$set": update_data})
-    
+
     # Return updated user
     updated = await db.users.find_one({"_id": user["id"]})
     return user_doc_to_response(updated)
@@ -1744,10 +1807,57 @@ async def customer_dashboard(user=Depends(require_customer)):
             services.append(order)
         if "hosting" in text:
             hosting.append(order)
-        if "domain" in text:
+        if "domain" in text or order.get("domainName"):
             domains.append(order)
         if "e-mail" in text or "email" in text:
             email_services.append(order)
+
+    # 30-day upcoming renewals for services
+    now = datetime.now(timezone.utc)
+    in_30_days = now + timedelta(days=30)
+    upcoming_renewals = []
+    for order in active_orders:
+        # Check order renewal date or created date + duration
+        created = order.get("createdAt")
+        duration = order.get("duration", "monthly")
+        days = 365 if duration == "yearly" else (730 if duration == "two_years" else 30)
+        if isinstance(created, datetime):
+            renewal_date = created + timedelta(days=days)
+            if now <= renewal_date <= in_30_days:
+                upcoming_renewals.append({
+                    "id": order.get("id"),
+                    "name": order.get("productName") or "Dienstleistung",
+                    "domain": order.get("domainName") or order.get("domainChoice") or "-",
+                    "renewalDate": renewal_date.isoformat(),
+                    "amount": order.get("total") or 0.0,
+                    "status": order.get("status") or "active"
+                })
+
+    # Recent successful payments
+    paid_invoices = [inv for inv in invoices if inv.get("status") == "paid"]
+    recent_payments = []
+    for inv in paid_invoices[:5]:
+        recent_payments.append({
+            "id": inv.get("id"),
+            "number": inv.get("number"),
+            "date": inv.get("paidAt") or inv.get("createdAt"),
+            "amount": inv.get("total", 0),
+            "currency": inv.get("currency", "CHF"),
+            "method": "Online / TWINT / Karte",
+            "status": "Erfolgreich"
+        })
+
+    # Documents available for download (paid invoices, contracts)
+    documents = []
+    for inv in invoices:
+        documents.append({
+            "id": inv.get("id"),
+            "title": f"Fatura #{inv.get('number')}",
+            "type": "invoice",
+            "date": inv.get("createdAt"),
+            "size": "PDF",
+            "url": f"/api/admin/invoices/{inv.get('id')}/pdf"
+        })
 
     upcoming = []
     for inv in open_invoices:
@@ -1758,9 +1868,9 @@ async def customer_dashboard(user=Depends(require_customer)):
     notifications = []
     overdue_count = len([inv for inv in invoices if inv.get("status") in {"overdue", "dunning_sent", "collection_warning"}])
     if overdue_count:
-        notifications.append({"type": "warning", "message": f"{overdue_count} Rechnung(en) sind ueberfaellig."})
+        notifications.append({"type": "warning", "message": f"{overdue_count} fatura vadesi geçmiş durumda."})
     if open_tickets:
-        notifications.append({"type": "info", "message": f"{len(open_tickets)} offene Support-Anfrage(n)."})
+        notifications.append({"type": "info", "message": f"{len(open_tickets)} açık destek talebi."})
     
     return {
         "customer": user,
@@ -1776,9 +1886,11 @@ async def customer_dashboard(user=Depends(require_customer)):
         "hosting": [clean(o) for o in hosting],
         "domains": [clean(o) for o in domains],
         "emailServices": [clean(o) for o in email_services],
+        "upcomingRenewals": upcoming_renewals,
+        "recentPayments": recent_payments,
+        "documents": documents,
         "projects": [],
         "messages": [],
-        "documents": [],
         "reviews": [],
         "complaints": [],
         "notifications": notifications,
@@ -2523,10 +2635,14 @@ def _validate_for_pdf(doc: dict, settings: dict, doc_type: str):
 
 
 @api_router.get("/admin/invoices/{iid}/pdf")
-async def invoice_pdf(iid: str, user=Depends(require_admin)):
+async def invoice_pdf(iid: str, user=Depends(require_user)):
     doc = await db.invoices.find_one({"id": iid})
     if not doc:
         raise HTTPException(404, "Dokument nicht gefunden")
+    # If customer, verify ownership
+    if user.get("role") == "customer":
+        if doc.get("userId") != user.get("id") and doc.get("clientEmail") != user.get("email"):
+            raise HTTPException(403, "Zugriff verweigert")
     company = await _resolve_company(doc.get("companyId"))
     settings = _legacy_settings_compat(company)
     doc_type = doc.get("type", "invoice")

@@ -86,8 +86,17 @@ export default function ProductMarketplace({ embedded = false }) {
   }, [enriched]);
   const hostingProducts = enriched.filter((product) => normalize(product.categoryName).includes("hosting") || normalize(product.name).includes("hosting")).slice(0, 4);
 
+  const handleSelectProduct = (product) => {
+    // Navigate to configuration route for selected product with billing cycle preserved
+    const targetUrl = embedded
+      ? `/dashboard/products/${product.id}`
+      : `/products/${product.id}`;
+    navigate(targetUrl);
+  };
+
   const orderProduct = async (product) => {
     if (!user) {
+      sessionStorage.setItem("redwork_pending_product_id", product.id);
       navigate("/login");
       return;
     }
@@ -101,10 +110,12 @@ export default function ProductMarketplace({ embedded = false }) {
         quantity: 1,
         domainChoice: domainChoices[product.id] || "later",
       });
-      setMessage(`Bestellung erfolgreich: ${res.data.reference || res.data.id}`);
-      navigate("/dashboard/products");
+      setMessage(`Sipariş başarıyla oluşturuldu: ${res.data.reference || res.data.id}`);
+      setTimeout(() => {
+        navigate("/dashboard?tab=services");
+      }, 1200);
     } catch (err) {
-      setMessage(err.response?.data?.detail || "Bestellung fehlgeschlagen.");
+      setMessage(err.response?.data?.detail || "Sipariş oluşturulamadı. Lütfen tekrar deneyin.");
     } finally {
       setOrdering("");
     }
@@ -212,7 +223,7 @@ export default function ProductMarketplace({ embedded = false }) {
                 </div>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
                   <Link to={embedded ? `/dashboard/products/${product.id}` : `/products/${product.id}`}><Button variant="outline" className="w-full">Details</Button></Link>
-                  <Button onClick={() => orderProduct(product)} disabled={ordering === product.id || product.status !== "active"} className="w-full"><ShoppingCart className="mr-2 h-4 w-4" /> Auswählen</Button>
+                  <Button onClick={() => handleSelectProduct(product)} disabled={ordering === product.id || product.status !== "active"} className="w-full bg-[#E63946] hover:bg-[#d02f3c] text-white"><ShoppingCart className="mr-2 h-4 w-4" /> Auswählen</Button>
                 </div>
               </article>
             );
