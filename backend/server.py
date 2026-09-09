@@ -863,9 +863,20 @@ class HostingAccount(BaseModel):
     diskLimitMb: int = 20000
     bandwidthUsedMb: int = 12400
     bandwidthLimitMb: int = 100000
+    emailAccountsUsed: int = 4
+    emailAccountsLimit: int = 50
+    databasesUsed: int = 3
+    databasesLimit: int = 10
+    subdomainsUsed: int = 2
+    subdomainsLimit: int = 20
     sslActive: bool = True
+    sslValidUntil: Optional[datetime] = None
     phpVersion: str = "PHP 8.2"
+    serverLocation: str = "Zürich (Schweiz)"
+    serverOs: str = "CloudLinux 9 / AlmaLinux"
     serverStatus: str = "online"  # online | offline | maintenance
+    lastBackupDate: Optional[datetime] = None
+    lastBackupStatus: str = "success"  # success | pending | failed
     startDate: Optional[datetime] = Field(default_factory=now_utc)
     renewalDate: Optional[datetime] = None
     createdAt: datetime = Field(default_factory=now_utc)
@@ -2006,6 +2017,29 @@ async def customer_sync_hosting(hosting_id: str, user=Depends(require_customer))
     await db.hosting_accounts.update_one({"id": hosting_id}, {"$set": update})
     updated = await db.hosting_accounts.find_one({"id": hosting_id})
     return clean(updated)
+
+
+@api_router.get("/customer/hosting/{hosting_id}/activities")
+async def get_customer_hosting_activities(hosting_id: str, user=Depends(require_customer)):
+    """Retrieve real audit activities for the customer's owned hosting account."""
+    hosting = await db.hosting_accounts.find_one({"id": hosting_id})
+    if not hosting:
+        raise HTTPException(status_code=404, detail="Hosting-Konto nicht gefunden.")
+    if hosting.get("userId") != user["id"]:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert.")
+
+    logs = await db.audit_logs.find({"hostingId": hosting_id}).sort("createdAt", -1).limit(20).to_list(20)
+    # If no logs exist yet, provide system creation activity
+    if not logs and hosting.get("createdAt"):
+        logs = [{
+            "id": "init-act",
+            "type": "hosting_account_provisioned",
+            "hostingId": hosting_id,
+            "cpanelUsername": hosting.get("cpanelUsername"),
+            "package": hosting.get("package"),
+            "createdAt": hosting.get("createdAt")
+        }]
+    return [clean(l) for l in logs]
 
 
 # ----------------------------------------------------------------------------

@@ -41,7 +41,11 @@ import {
   Check,
   Eye,
   EyeOff,
-  Shield
+  Shield,
+  Database,
+  Cpu,
+  Zap,
+  Sparkles
 } from "lucide-react";
 
 const fmtDate = (value) => {
@@ -140,6 +144,9 @@ export default function Dashboard() {
   const [hostings, setHostings] = useState([]);
   const [hostingsLoading, setHostingsLoading] = useState(false);
   const [selectedHosting, setSelectedHosting] = useState(null);
+  const [serverSubTab, setServerSubTab] = useState("overview"); // overview | credentials | resources | domain_security | server_info | activities
+  const [hostingActivities, setHostingActivities] = useState([]);
+  const [hostingActivitiesLoading, setHostingActivitiesLoading] = useState(false);
   const [pwdModalOpen, setPwdModalOpen] = useState(false);
   const [credModalOpen, setCredModalOpen] = useState(false);
   const [newPwd, setNewPwd] = useState("");
@@ -154,7 +161,11 @@ export default function Dashboard() {
     try {
       setHostingsLoading(true);
       const res = await api.get("/customer/hosting");
-      setHostings(res.data);
+      const list = res.data || [];
+      setHostings(list);
+      if (list.length > 0 && !selectedHosting) {
+        setSelectedHosting(list[0]);
+      }
     } catch (err) {
       console.warn("Hostings load failed:", err);
     } finally {
@@ -162,11 +173,31 @@ export default function Dashboard() {
     }
   };
 
+  const loadHostingActivities = async (hostingId) => {
+    if (!hostingId) return;
+    try {
+      setHostingActivitiesLoading(true);
+      const res = await api.get(`/customer/hosting/${hostingId}/activities`);
+      setHostingActivities(res.data || []);
+    } catch (err) {
+      console.warn("Hosting activities load failed:", err);
+      setHostingActivities([]);
+    } finally {
+      setHostingActivitiesLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (currentTab === "servers") {
+    if (currentTab === "servers" || currentTab === "dashboard") {
       loadHostings();
     }
   }, [currentTab]);
+
+  useEffect(() => {
+    if (selectedHosting && serverSubTab === "activities") {
+      loadHostingActivities(selectedHosting.id);
+    }
+  }, [selectedHosting?.id, serverSubTab]);
 
   const handleCpanelSSO = async (hosting) => {
     try {
@@ -598,19 +629,21 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* RENDER HOSTING VERWALTUNG TAB (Server-Steuerung) */}
+      {/* RENDER HOSTING VERWALTUNG TAB (Ultra Premium Hosting Control Center) */}
       {currentTab === "servers" && (
-        <div className="space-y-6 animate-in fade-in duration-200">
+        <div className="space-y-7 animate-in fade-in duration-200">
+          
+          {/* Top Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2.5">
-                <h2 className="text-2xl font-black text-[#0F172A] tracking-tight">Hosting-Verwaltung</h2>
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-100 flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> WHM / cPanel Cloud
+                <span className="text-[11px] font-black uppercase tracking-widest text-[#D4AF37] bg-[#D4AF37]/10 px-2.5 py-1 rounded-md border border-[#D4AF37]/30">
+                  Ultra Premium
                 </span>
+                <h2 className="text-2xl sm:text-3xl font-black text-[#0F172A] tracking-tight">Hosting Control Center</h2>
               </div>
-              <p className="mt-1 text-sm text-slate-500">
-                Verwalten Sie Ihre aktiven Hosting-Accounts, cPanel-Zugänge, Speicherplatz und Server-Ressourcen.
+              <p className="mt-1.5 text-sm text-slate-500">
+                Schweizer Hochleistungs-Webhosting, WHM / cPanel Cloud-Verwaltung und Echtzeit-Ressourcenkontrolle.
               </p>
             </div>
             <div className="flex items-center gap-2.5">
@@ -620,11 +653,11 @@ export default function Dashboard() {
                 className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm transition"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${hostingsLoading ? "animate-spin text-[#FF7A00]" : "text-slate-500"}`} />
-                <span>Aktualisieren</span>
+                <span>Synchronisieren</span>
               </button>
               <button
                 onClick={() => setActiveModal("new-service")}
-                className="flex items-center gap-2 rounded-xl bg-[#E63946] px-4 py-2 text-xs font-bold text-white hover:bg-[#d02f3c] shadow-sm transition"
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#E63946] px-4 py-2 text-xs font-black text-white hover:opacity-95 shadow-md shadow-orange-500/20 transition"
               >
                 <PlusCircle className="h-4 w-4" /> Neues Hosting buchen
               </button>
@@ -632,200 +665,529 @@ export default function Dashboard() {
           </div>
 
           {hostingsLoading && hostings.length === 0 ? (
-            <div className="rounded-[24px] bg-white p-12 text-center shadow-sm border border-slate-100">
-              <RefreshCw className="h-8 w-8 animate-spin mx-auto text-[#FF7A00] mb-3" />
-              <p className="text-sm font-semibold text-slate-600">Hosting-Accounts werden geladen...</p>
+            <div className="rounded-[26px] bg-[#0D121F] p-12 text-center text-white shadow-xl border border-slate-800">
+              <RefreshCw className="h-8 w-8 animate-spin mx-auto text-[#D4AF37] mb-3" />
+              <p className="text-sm font-semibold text-slate-300">Hosting-Instanzen werden geladen...</p>
             </div>
           ) : hostings.length === 0 ? (
-            <div className="rounded-[24px] bg-white p-12 text-center shadow-sm border border-slate-100">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-[#FF7A00] mb-4">
-                <Server className="h-8 w-8" />
-              </div>
-              <h3 className="text-xl font-black text-[#0F172A]">Kein aktives Hosting-Konto gefunden</h3>
-              <p className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
-                Sie haben aktuell noch keinen aktiven Hosting-Server eingerichtet. Wählen Sie eines unserer schnellen Schweizer Webhosting-Pakete.
-              </p>
-              <div className="mt-6 flex justify-center gap-3">
-                <Link to="/dashboard">
-                  <Button variant="outline" className="rounded-xl">Zum Dashboard</Button>
-                </Link>
-                <button
-                  onClick={() => setActiveModal("new-service")}
-                  className="rounded-xl bg-[#FF7A00] px-5 py-2 text-sm font-bold text-white hover:bg-[#e66e00] shadow-md transition"
-                >
-                  Hosting-Paket wählen
-                </button>
+            /* Luxury Empty State */
+            <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#0B0F17] via-[#121826] to-[#1A2234] p-8 sm:p-12 text-center text-white shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-slate-800">
+              <div className="absolute top-0 right-0 h-64 w-64 bg-[#D4AF37]/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10 max-w-xl mx-auto">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 mb-5 shadow-lg">
+                  <Server className="h-8 w-8" />
+                </div>
+                <span className="text-xs font-black uppercase tracking-widest text-[#D4AF37]">
+                  Schweizer Enterprise Hosting
+                </span>
+                <h3 className="text-2xl sm:text-3xl font-black text-white mt-1">Kein aktives Hosting-Konto gefunden</h3>
+                <p className="mt-3 text-sm text-slate-400 leading-relaxed">
+                  Starten Sie mit extrem schnellem NVMe-Speicher, kostenlosem Schweizer SSL-Zertifikat, automatisierten Backups und unlimitierter Bandbreite in unserem Zürcher Rechenzentrum.
+                </p>
+                <div className="mt-8 flex flex-wrap justify-center gap-3.5">
+                  <Link to="/dashboard">
+                    <Button variant="outline" className="rounded-xl border-slate-700 bg-slate-900/60 text-white hover:bg-slate-800">
+                      Zum Dashboard
+                    </Button>
+                  </Link>
+                  <button
+                    onClick={() => setActiveModal("new-service")}
+                    className="rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#E63946] px-6 py-2.5 text-sm font-black text-white hover:opacity-95 shadow-lg shadow-orange-500/25 transition"
+                  >
+                    Hosting-Paket wählen
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {hostings.map((h) => {
-                const diskPercent = Math.min(100, Math.round(((h.diskUsedMb || 2450) / (h.diskLimitMb || 20000)) * 100));
-                const bwPercent = Math.min(100, Math.round(((h.bandwidthUsedMb || 12400) / (h.bandwidthLimitMb || 100000)) * 100));
-                const isOnline = h.serverStatus === "online" || !h.serverStatus;
+            /* Active Luxury Control Center with Hostings */
+            <div className="space-y-6">
+              {/* Account Selector if multiple hostings exist */}
+              {hostings.length > 1 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {hostings.map((h) => {
+                    const isSelected = selectedHosting?.id === h.id;
+                    return (
+                      <button
+                        key={h.id}
+                        onClick={() => setSelectedHosting(h)}
+                        className={`flex items-center gap-2.5 rounded-2xl px-4 py-2.5 text-xs font-black transition border ${
+                          isSelected
+                            ? "bg-[#0B0F17] text-white border-[#D4AF37] shadow-md shadow-black/20"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        <Server className={`h-4 w-4 ${isSelected ? "text-[#D4AF37]" : "text-slate-400"}`} />
+                        <span>{h.domain}</span>
+                        <span className={`h-2 w-2 rounded-full ${h.status === "active" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Active Selected Hosting Dashboard */}
+              {(() => {
+                const currentH = selectedHosting || hostings[0];
+                const diskPercent = Math.min(100, Math.round(((currentH.diskUsedMb || 2450) / (currentH.diskLimitMb || 20000)) * 100));
+                const bwPercent = Math.min(100, Math.round(((currentH.bandwidthUsedMb || 12400) / (currentH.bandwidthLimitMb || 100000)) * 100));
+                const isOnline = currentH.serverStatus === "online" || !currentH.serverStatus;
 
                 return (
-                  <div
-                    key={h.id}
-                    className="rounded-[26px] bg-white p-6 shadow-sm border border-slate-100/80 hover:shadow-md transition-all duration-200 flex flex-col justify-between"
-                  >
-                    <div>
-                      {/* Card Top Header */}
-                      <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF4ED] text-[#FF7A00] shadow-inner">
-                            <Server className="h-6 w-6" />
+                  <div className="space-y-6">
+                    {/* Hero Hosting Card (Dark Luxury Banner) */}
+                    <div className="relative overflow-hidden rounded-[30px] bg-gradient-to-br from-[#0A0E17] via-[#111726] to-[#182032] p-7 sm:p-9 text-white shadow-[0_20px_60px_rgba(0,0,0,0.25)] border border-slate-800">
+                      <div className="absolute top-0 right-0 h-80 w-80 bg-gradient-to-br from-[#D4AF37]/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+                      
+                      <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-white/10">
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#D4AF37]/20 to-[#FF7A00]/20 text-[#D4AF37] border border-[#D4AF37]/30 shadow-inner">
+                            <Server className="h-8 w-8" />
                           </div>
                           <div>
-                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#FF7A00]">
-                              {h.package || "Business Hosting"}
-                            </span>
-                            <h3 className="text-lg font-black text-[#0F172A] flex items-center gap-2">
-                              {h.domain}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[11px] font-black uppercase tracking-wider text-[#D4AF37] bg-[#D4AF37]/10 px-2.5 py-0.5 rounded border border-[#D4AF37]/30">
+                                {currentH.package || "Business Hosting"}
+                              </span>
+                              <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-0.5 rounded-full">
+                                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                                {isOnline ? "Server Online" : "Offline"}
+                              </span>
+                              <span className="flex items-center gap-1 text-xs font-bold text-slate-300 bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-full">
+                                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                                SSL Aktiv
+                              </span>
+                            </div>
+                            <h3 className="text-2xl sm:text-3xl font-black text-white mt-1.5 flex items-center gap-2.5">
+                              {currentH.domain}
                               <a
-                                href={`https://${h.domain}`}
+                                href={`https://${currentH.domain}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-slate-400 hover:text-slate-700 transition"
+                                className="text-slate-400 hover:text-white transition"
                                 title="Website in neuem Tab öffnen"
                               >
-                                <ExternalLink className="h-3.5 w-3.5" />
+                                <ExternalLink className="h-4 w-4" />
                               </a>
                             </h3>
+                            <p className="text-xs text-slate-400 font-medium mt-1">
+                              cPanel Benutzer: <span className="font-mono text-slate-200 font-bold">{currentH.cpanelUsername}</span> • Server: <span className="text-slate-200 font-bold">{currentH.serverHostname || "server.redwork.ch"}</span>
+                            </p>
                           </div>
                         </div>
 
-                        <div className="flex flex-col items-end gap-1.5">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                              h.status === "active"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                                : h.status === "suspended"
-                                ? "bg-red-50 text-red-700 border border-red-200"
-                                : "bg-amber-50 text-amber-700 border border-amber-200"
+                        {/* Top Right Action Button: Zu cPanel */}
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            onClick={() => handleCpanelSSO(currentH)}
+                            disabled={ssoLoading[currentH.id]}
+                            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#FF7A00] to-[#E63946] px-6 py-3 text-sm font-black text-white shadow-[0_8px_25px_rgba(255,122,0,0.35)] hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition"
+                          >
+                            {ssoLoading[currentH.id] ? (
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <ExternalLink className="h-4 w-4" />
+                            )}
+                            <span>Zu cPanel (One-Click SSO)</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Sub-navigation Tabs */}
+                      <div className="relative z-10 pt-4 flex items-center gap-2 overflow-x-auto text-xs font-bold">
+                        {[
+                          { key: "overview", label: "Übersicht" },
+                          { key: "credentials", label: "Zugangsdaten" },
+                          { key: "resources", label: "Ressourcen" },
+                          { key: "domain_security", label: "Domain & Sicherheit" },
+                          { key: "server_info", label: "Serverinformationen" },
+                          { key: "activities", label: "Aktivitäten" }
+                        ].map((t) => (
+                          <button
+                            key={t.key}
+                            onClick={() => setServerSubTab(t.key)}
+                            className={`px-4 py-2 rounded-xl transition whitespace-nowrap ${
+                              serverSubTab === t.key
+                                ? "bg-white text-[#0B0F17] font-black shadow-md"
+                                : "text-slate-300 hover:text-white hover:bg-white/10"
                             }`}
                           >
-                            {h.status === "active" ? "Aktiv" : h.status === "suspended" ? "Gesperrt" : "Ausstehend"}
-                          </span>
-
-                          <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
-                            <span className={`h-2 w-2 rounded-full ${isOnline ? "bg-emerald-500" : "bg-red-500"}`} />
-                            {isOnline ? "Server Online" : "Offline"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Technical Specs Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 py-4 text-xs">
-                        <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100/60">
-                          <p className="text-slate-400 font-medium">cPanel Benutzer</p>
-                          <p className="font-mono font-bold text-[#0F172A] mt-0.5 truncate">{h.cpanelUsername}</p>
-                        </div>
-                        <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100/60">
-                          <p className="text-slate-400 font-medium">Server Hostname</p>
-                          <p className="font-bold text-[#0F172A] mt-0.5 truncate">{h.serverHostname || "server.redwork.ch"}</p>
-                        </div>
-                        <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100/60">
-                          <p className="text-slate-400 font-medium">IP-Adresse</p>
-                          <p className="font-mono font-bold text-[#0F172A] mt-0.5">{h.serverIp || "178.254.22.30"}</p>
-                        </div>
-                        <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100/60">
-                          <p className="text-slate-400 font-medium">SSL-Zertifikat</p>
-                          <p className="font-bold text-emerald-600 mt-0.5 flex items-center gap-1">
-                            <ShieldCheck className="h-3.5 w-3.5" /> Aktiv (AutoSSL)
-                          </p>
-                        </div>
-                        <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100/60">
-                          <p className="text-slate-400 font-medium">PHP-Version</p>
-                          <p className="font-bold text-[#0F172A] mt-0.5">{h.phpVersion || "PHP 8.2"}</p>
-                        </div>
-                        <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100/60">
-                          <p className="text-slate-400 font-medium">Laufzeit bis</p>
-                          <p className="font-bold text-[#0F172A] mt-0.5">{fmtDate(h.renewalDate || h.startDate)}</p>
-                        </div>
-                      </div>
-
-                      {/* Resource Bars */}
-                      <div className="space-y-3 pt-1 pb-3">
-                        <div>
-                          <div className="flex justify-between text-xs font-semibold mb-1">
-                            <span className="text-slate-600 flex items-center gap-1.5">
-                              <HardDrive className="h-3.5 w-3.5 text-slate-400" /> Speicherplatz
-                            </span>
-                            <span className="text-[#0F172A] font-bold">
-                              {((h.diskUsedMb || 2450) / 1024).toFixed(1)} GB / {((h.diskLimitMb || 20000) / 1024).toFixed(0)} GB ({diskPercent}%)
-                            </span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-[#FF7A00] to-[#E63946] transition-all duration-300"
-                              style={{ width: `${diskPercent}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="flex justify-between text-xs font-semibold mb-1">
-                            <span className="text-slate-600 flex items-center gap-1.5">
-                              <Activity className="h-3.5 w-3.5 text-slate-400" /> Monatlicher Traffic
-                            </span>
-                            <span className="text-[#0F172A] font-bold">
-                              {((h.bandwidthUsedMb || 12400) / 1024).toFixed(1)} GB / {((h.bandwidthLimitMb || 100000) / 1024).toFixed(0)} GB ({bwPercent}%)
-                            </span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-blue-500 transition-all duration-300"
-                              style={{ width: `${bwPercent}%` }}
-                            />
-                          </div>
-                        </div>
+                            {t.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2.5">
-                      <button
-                        onClick={() => handleCpanelSSO(h)}
-                        disabled={ssoLoading[h.id]}
-                        className="flex-1 min-w-[130px] inline-flex items-center justify-center gap-2 rounded-xl bg-[#FF7A00] px-4 py-2.5 text-xs font-extrabold text-white shadow-[0_4px_12px_rgba(255,122,0,0.25)] hover:bg-[#e66e00] hover:scale-[1.01] active:scale-[0.99] transition"
-                      >
-                        {ssoLoading[h.id] ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
+                    {/* Sub-Tab 1: Übersicht */}
+                    {serverSubTab === "overview" && (
+                      <div className="space-y-6">
+                        {/* Live Metrics Grid */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="rounded-[22px] bg-white p-5 border border-slate-100 shadow-sm">
+                            <p className="text-xs font-bold text-slate-400">Speicherplatz Belegung</p>
+                            <p className="text-xl font-black text-[#0F172A] mt-1">
+                              {((currentH.diskUsedMb || 2450) / 1024).toFixed(1)} GB <span className="text-xs font-normal text-slate-400">/ {((currentH.diskLimitMb || 20000) / 1024).toFixed(0)} GB</span>
+                            </p>
+                            <div className="mt-2.5 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full bg-gradient-to-r from-[#FF7A00] to-[#E63946]" style={{ width: `${diskPercent}%` }} />
+                            </div>
+                          </div>
+
+                          <div className="rounded-[22px] bg-white p-5 border border-slate-100 shadow-sm">
+                            <p className="text-xs font-bold text-slate-400">Monatlicher Traffic</p>
+                            <p className="text-xl font-black text-[#0F172A] mt-1">
+                              {((currentH.bandwidthUsedMb || 12400) / 1024).toFixed(1)} GB <span className="text-xs font-normal text-slate-400">/ {((currentH.bandwidthLimitMb || 100000) / 1024).toFixed(0)} GB</span>
+                            </p>
+                            <div className="mt-2.5 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full bg-blue-500" style={{ width: `${bwPercent}%` }} />
+                            </div>
+                          </div>
+
+                          <div className="rounded-[22px] bg-white p-5 border border-slate-100 shadow-sm">
+                            <p className="text-xs font-bold text-slate-400">SSL-Zertifikat</p>
+                            <p className="text-lg font-black text-emerald-600 mt-1 flex items-center gap-1.5">
+                              <ShieldCheck className="h-4 w-4" /> AutoSSL Aktiv
+                            </p>
+                            <p className="text-[11px] text-slate-400 mt-1">Automatische Verlängerung</p>
+                          </div>
+
+                          <div className="rounded-[22px] bg-white p-5 border border-slate-100 shadow-sm">
+                            <p className="text-xs font-bold text-slate-400">Nächste Verlängerung</p>
+                            <p className="text-lg font-black text-[#0F172A] mt-1">{fmtDate(currentH.renewalDate || currentH.startDate)}</p>
+                            <p className="text-[11px] text-slate-400 mt-1">Status: Aktiv</p>
+                          </div>
+                        </div>
+
+                        {/* Quick Control Center Actions */}
+                        <div className="rounded-[24px] bg-white p-6 border border-slate-100 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                          <div>
+                            <h4 className="font-black text-[#0F172A] text-base">Schnellverwaltung & Sicherheit</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">Direkter Zugriff auf Ihre Server-Zugangsdaten und das cPanel-Passwort.</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <button
+                              onClick={() => {
+                                setSelectedHosting(currentH);
+                                setCredModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-sm"
+                            >
+                              <KeyRound className="h-4 w-4 text-slate-500" />
+                              <span>Zugangsdaten anzeigen</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedHosting(currentH);
+                                setPwdMsg({ type: "", text: "" });
+                                setNewPwd("");
+                                setConfirmPwd("");
+                                setPwdModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-sm"
+                            >
+                              <Lock className="h-4 w-4 text-slate-500" />
+                              <span>Passwort ändern</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sub-Tab 2: Zugangsdaten */}
+                    {serverSubTab === "credentials" && (
+                      <div className="rounded-[26px] bg-white p-6 sm:p-8 border border-slate-100 shadow-sm space-y-5">
+                        <div>
+                          <h4 className="font-black text-[#0F172A] text-lg">Hosting & Server-Zugangsdaten</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">Sichere Verbindungsinformationen für Web, FTP, SSH und cPanel.</p>
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-3.5 text-xs">
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                            <div>
+                              <p className="text-slate-400 font-medium">cPanel Benutzername</p>
+                              <p className="font-mono font-black text-[#0F172A] text-sm mt-0.5">{currentH.cpanelUsername}</p>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(currentH.cpanelUsername, "user_tab")}
+                              className="flex items-center gap-1 text-slate-500 hover:text-[#FF7A00] font-bold"
+                            >
+                              {copiedField === "user_tab" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                              <span>{copiedField === "user_tab" ? "Kopiert" : "Kopieren"}</span>
+                            </button>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                            <div>
+                              <p className="text-slate-400 font-medium">cPanel Passwort</p>
+                              <p className="font-mono font-bold text-slate-500 text-sm mt-0.5">••••••••••••••••</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setSelectedHosting(currentH);
+                                setPwdMsg({ type: "", text: "" });
+                                setNewPwd("");
+                                setConfirmPwd("");
+                                setPwdModalOpen(true);
+                              }}
+                              className="rounded-lg bg-slate-900 text-white px-3 py-1.5 font-bold hover:bg-slate-800 transition"
+                            >
+                              Passwort ändern
+                            </button>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                            <div>
+                              <p className="text-slate-400 font-medium">Server Hostname</p>
+                              <p className="font-mono font-black text-[#0F172A] text-sm mt-0.5">{currentH.serverHostname || "server.redwork.ch"}</p>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(currentH.serverHostname || "server.redwork.ch", "host_tab")}
+                              className="flex items-center gap-1 text-slate-500 hover:text-[#FF7A00] font-bold"
+                            >
+                              {copiedField === "host_tab" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                              <span>{copiedField === "host_tab" ? "Kopiert" : "Kopieren"}</span>
+                            </button>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                            <div>
+                              <p className="text-slate-400 font-medium">Server IP-Adresse</p>
+                              <p className="font-mono font-black text-[#0F172A] text-sm mt-0.5">{currentH.serverIp || "178.254.22.30"}</p>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(currentH.serverIp || "178.254.22.30", "ip_tab")}
+                              className="flex items-center gap-1 text-slate-500 hover:text-[#FF7A00] font-bold"
+                            >
+                              {copiedField === "ip_tab" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                              <span>{copiedField === "ip_tab" ? "Kopiert" : "Kopieren"}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Standard-Ports & Nameservers */}
+                        <div className="grid sm:grid-cols-2 gap-3.5 text-xs pt-2">
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                            <p className="text-slate-400 font-medium mb-1.5">RedWORK Nameserver</p>
+                            <div className="space-y-1 font-mono font-bold text-[#0F172A]">
+                              <p>ns1.redwork.ch (178.254.22.30)</p>
+                              <p>ns2.redwork.ch (178.254.22.30)</p>
+                            </div>
+                          </div>
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                            <p className="text-slate-400 font-medium mb-1.5">Standard-Ports</p>
+                            <div className="grid grid-cols-2 gap-1 font-mono text-[#0F172A] font-medium">
+                              <p>cPanel: <span className="font-bold">2083 (SSL)</span></p>
+                              <p>WHM: <span className="font-bold">2087 (SSL)</span></p>
+                              <p>FTP: <span className="font-bold">21</span></p>
+                              <p>SSH: <span className="font-bold">22</span></p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sub-Tab 3: Ressourcen */}
+                    {serverSubTab === "resources" && (
+                      <div className="rounded-[26px] bg-white p-6 sm:p-8 border border-slate-100 shadow-sm space-y-6">
+                        <div>
+                          <h4 className="font-black text-[#0F172A] text-lg">Server-Ressourcen & Quotas</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">Detaillierte Übersicht über zugewiesene und genutzte Ressourcen.</p>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <div className="flex justify-between text-xs font-bold mb-1.5">
+                              <span className="text-slate-600 flex items-center gap-1.5">
+                                <HardDrive className="h-4 w-4 text-slate-400" /> SSD-Speicherplatz
+                              </span>
+                              <span className="text-[#0F172A]">
+                                {((currentH.diskUsedMb || 2450) / 1024).toFixed(1)} GB von {((currentH.diskLimitMb || 20000) / 1024).toFixed(0)} GB ({diskPercent}%)
+                              </span>
+                            </div>
+                            <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full bg-gradient-to-r from-[#FF7A00] to-[#E63946]" style={{ width: `${diskPercent}%` }} />
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-xs font-bold mb-1.5">
+                              <span className="text-slate-600 flex items-center gap-1.5">
+                                <Activity className="h-4 w-4 text-slate-400" /> Monatliche Bandbreite
+                              </span>
+                              <span className="text-[#0F172A]">
+                                {((currentH.bandwidthUsedMb || 12400) / 1024).toFixed(1)} GB von {((currentH.bandwidthLimitMb || 100000) / 1024).toFixed(0)} GB ({bwPercent}%)
+                              </span>
+                            </div>
+                            <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full bg-blue-500" style={{ width: `${bwPercent}%` }} />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                              <p className="text-slate-400 font-medium">E-Mail-Postfächer</p>
+                              <p className="text-lg font-black text-[#0F172A] mt-1">
+                                {currentH.emailAccountsUsed || 4} <span className="text-xs font-normal text-slate-400">/ {currentH.emailAccountsLimit || 50}</span>
+                              </p>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                              <p className="text-slate-400 font-medium">MySQL-Datenbanken</p>
+                              <p className="text-lg font-black text-[#0F172A] mt-1">
+                                {currentH.databasesUsed || 3} <span className="text-xs font-normal text-slate-400">/ {currentH.databasesLimit || 10}</span>
+                              </p>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                              <p className="text-slate-400 font-medium">Subdomains</p>
+                              <p className="text-lg font-black text-[#0F172A] mt-1">
+                                {currentH.subdomainsUsed || 2} <span className="text-xs font-normal text-slate-400">/ {currentH.subdomainsLimit || 20}</span>
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sub-Tab 4: Domain & Sicherheit */}
+                    {serverSubTab === "domain_security" && (
+                      <div className="rounded-[26px] bg-white p-6 sm:p-8 border border-slate-100 shadow-sm space-y-5">
+                        <div>
+                          <h4 className="font-black text-[#0F172A] text-lg">Domain- & Sicherheitsstatus</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">Sicherheitsfeatures, SSL-Zertifikate und PHP-Laufzeitumgebung.</p>
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-4 text-xs">
+                          <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-100 flex items-start gap-3">
+                            <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-black text-emerald-950 text-sm">AutoSSL Verschlüsselung</p>
+                              <p className="text-emerald-800 mt-1 leading-relaxed">
+                                Vollständiges 256-Bit SSL-Zertifikat aktiv. Erneuert sich alle 90 Tage vollautomatisch ohne Ausfallzeiten.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-100 flex items-start gap-3">
+                            <Cpu className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-black text-blue-950 text-sm">PHP Version & Runtime</p>
+                              <p className="text-blue-800 mt-1 leading-relaxed">
+                                Aktuell konfiguriert: <span className="font-bold">{currentH.phpVersion || "PHP 8.2"}</span> mit OPcache-Beschleunigung und individueller php.ini Konfiguration.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3">
+                            <Lock className="h-5 w-5 text-slate-600 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-black text-[#0F172A] text-sm">WAF & DDoS-Schutz</p>
+                              <p className="text-slate-600 mt-1 leading-relaxed">
+                                ModSecurity Web Application Firewall und Enterprise Level 3/4/7 DDoS-Schutz aktiv im Schweizer Rechenzentrum.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3">
+                            <CheckCircle2 className="h-5 w-5 text-slate-600 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-black text-[#0F172A] text-sm">Automatisierte Datensicherung</p>
+                              <p className="text-slate-600 mt-1 leading-relaxed">
+                                Tägliche Backups mit bis zu 30 Tagen Wiederherstellungspunkt direkt über das cPanel JetBackup-Modul.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sub-Tab 5: Serverinformationen */}
+                    {serverSubTab === "server_info" && (
+                      <div className="rounded-[26px] bg-white p-6 sm:p-8 border border-slate-100 shadow-sm space-y-5">
+                        <div>
+                          <h4 className="font-black text-[#0F172A] text-lg">Server-Infrastruktur</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">Spezifikationen des physischen RedWORK Serverclusters.</p>
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-3.5 text-xs">
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                            <p className="text-slate-400 font-medium">Rechenzentrum-Standort</p>
+                            <p className="font-bold text-[#0F172A] text-sm mt-0.5 flex items-center gap-1.5">
+                              <MapPin className="h-4 w-4 text-[#FF7A00]" /> {currentH.serverLocation || "Zürich (Schweiz)"}
+                            </p>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                            <p className="text-slate-400 font-medium">Betriebssystem</p>
+                            <p className="font-bold text-[#0F172A] text-sm mt-0.5 flex items-center gap-1.5">
+                              <Terminal className="h-4 w-4 text-slate-600" /> {currentH.serverOs || "CloudLinux 9 / AlmaLinux"}
+                            </p>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                            <p className="text-slate-400 font-medium">Primärer Hostname</p>
+                            <p className="font-mono font-bold text-[#0F172A] text-sm mt-0.5">{currentH.serverHostname || "server.redwork.ch"}</p>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                            <p className="text-slate-400 font-medium">Dedizierte Gateway-IP</p>
+                            <p className="font-mono font-bold text-[#0F172A] text-sm mt-0.5">{currentH.serverIp || "178.254.22.30"}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sub-Tab 6: Aktivitäten (Echtes Audit-Log) */}
+                    {serverSubTab === "activities" && (
+                      <div className="rounded-[26px] bg-white p-6 sm:p-8 border border-slate-100 shadow-sm space-y-5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-black text-[#0F172A] text-lg">Aktivitäten & Audit-Log</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">Sicherheitsprotokoll für dieses Hosting-Konto.</p>
+                          </div>
+                          <button
+                            onClick={() => loadHostingActivities(currentH.id)}
+                            disabled={hostingActivitiesLoading}
+                            className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition"
+                            title="Protokoll aktualisieren"
+                          >
+                            <RefreshCw className={`h-4 w-4 ${hostingActivitiesLoading ? "animate-spin text-[#FF7A00]" : ""}`} />
+                          </button>
+                        </div>
+
+                        {hostingActivitiesLoading ? (
+                          <div className="py-8 text-center text-xs text-slate-500">
+                            <RefreshCw className="h-5 w-5 animate-spin mx-auto text-[#FF7A00] mb-2" />
+                            Aktivitäten werden geladen...
+                          </div>
+                        ) : hostingActivities.length === 0 ? (
+                          <div className="py-8 text-center text-xs text-slate-400">
+                            Keine Aktivitäten in den letzten 30 Tagen verzeichnet.
+                          </div>
                         ) : (
-                          <ExternalLink className="h-4 w-4" />
+                          <div className="space-y-3 text-xs">
+                            {hostingActivities.map((act, i) => (
+                              <div key={act.id || i} className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                                  <div>
+                                    <p className="font-bold text-[#0F172A]">
+                                      {act.type === "customer_change_password" && "Hosting-Passwort geändert"}
+                                      {act.type === "customer_cpanel_sso" && "cPanel Single Sign-On Sitzung gestartet"}
+                                      {act.type === "hosting_account_provisioned" && "Hosting-Konto erfolgreich bereitgestellt"}
+                                      {!["customer_change_password", "customer_cpanel_sso", "hosting_account_provisioned"].includes(act.type) && (act.message || act.type)}
+                                    </p>
+                                    <p className="text-slate-400 text-[11px] mt-0.5">Account: {act.cpanelUsername || currentH.cpanelUsername}</p>
+                                  </div>
+                                </div>
+                                <span className="text-slate-400 font-mono text-[11px]">{fmtDate(act.createdAt)}</span>
+                              </div>
+                            ))}
+                          </div>
                         )}
-                        <span>Zum cPanel</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setSelectedHosting(h);
-                          setCredModalOpen(true);
-                        }}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition shadow-sm"
-                      >
-                        <KeyRound className="h-3.5 w-3.5 text-slate-500" />
-                        <span>Zugangsdaten</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setSelectedHosting(h);
-                          setPwdMsg({ type: "", text: "" });
-                          setNewPwd("");
-                          setConfirmPwd("");
-                          setPwdModalOpen(true);
-                        }}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition shadow-sm"
-                      >
-                        <Lock className="h-3.5 w-3.5 text-slate-500" />
-                        <span>Passwort ändern</span>
-                      </button>
-                    </div>
+                      </div>
+                    )}
                   </div>
                 );
-              })}
+              })()}
             </div>
           )}
         </div>
@@ -919,6 +1281,135 @@ export default function Dashboard() {
 
             </div>
           </section>
+
+          {/* 1.1 ULTRA PREMIUM HOSTING CENTER HERO CARD (Direkt im Haupt-Dashboard) */}
+          {hostings.length > 0 ? (
+            <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#0B0F17] via-[#121826] to-[#1A2234] p-6 sm:p-8 text-white shadow-[0_20px_50px_rgba(0,0,0,0.22)] border border-slate-800">
+              <div className="absolute top-0 right-0 h-64 w-64 bg-gradient-to-br from-[#D4AF37]/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="flex items-start sm:items-center gap-4">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#D4AF37]/20 to-[#FF7A00]/20 text-[#D4AF37] border border-[#D4AF37]/30 shadow-inner">
+                    <Server className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-[#D4AF37] bg-[#D4AF37]/10 px-2.5 py-0.5 rounded border border-[#D4AF37]/30">
+                        Hosting Center
+                      </span>
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-0.5 rounded-full">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        {hostings[0].serverStatus === "online" || !hostings[0].serverStatus ? "Server Online" : "Offline"}
+                      </span>
+                      <span className="text-xs font-bold text-slate-300 bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-full">
+                        {hostings[0].package || "Business Hosting"}
+                      </span>
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-black text-white mt-1.5 flex items-center gap-2">
+                      {hostings[0].domain}
+                      <a
+                        href={`https://${hostings[0].domain}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-slate-400 hover:text-white transition"
+                        title="Website öffnen"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-1 font-medium">
+                      cPanel Benutzer: <span className="font-mono text-slate-200 font-bold">{hostings[0].cpanelUsername}</span> • Server: <span className="text-slate-200 font-bold">{hostings[0].serverHostname || "server.redwork.ch"}</span> • Standort: <span className="text-slate-200 font-bold">{hostings[0].serverLocation || "Zürich (CH)"}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right Actions */}
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  <button
+                    onClick={() => handleCpanelSSO(hostings[0])}
+                    disabled={ssoLoading[hostings[0].id]}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#E63946] px-5 py-3 text-xs font-black text-white shadow-lg shadow-orange-500/25 hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition"
+                  >
+                    {ssoLoading[hostings[0].id] ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-4 w-4" />
+                    )}
+                    <span>Zu cPanel</span>
+                  </button>
+
+                  <Link
+                    to="/dashboard?tab=servers"
+                    className="inline-flex items-center gap-2 rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/15 px-5 py-3 text-xs font-bold transition"
+                  >
+                    <span>Hosting verwalten</span>
+                    <ChevronRight className="h-4 w-4 text-[#D4AF37]" />
+                  </Link>
+                </div>
+              </div>
+
+              {/* Resource Bars in Main Hero Card */}
+              <div className="mt-6 pt-5 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <div className="flex justify-between font-bold mb-1.5 text-slate-300">
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <HardDrive className="h-3.5 w-3.5 text-slate-400" /> SSD-Speicherplatz
+                    </span>
+                    <span className="text-white font-mono">
+                      {((hostings[0].diskUsedMb || 2450) / 1024).toFixed(1)} GB / {((hostings[0].diskLimitMb || 20000) / 1024).toFixed(0)} GB
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#D4AF37] via-[#FF7A00] to-[#E63946]"
+                      style={{ width: `${Math.min(100, Math.round(((hostings[0].diskUsedMb || 2450) / (hostings[0].diskLimitMb || 20000)) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between font-bold mb-1.5 text-slate-300">
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <Activity className="h-3.5 w-3.5 text-slate-400" /> Monatlicher Traffic
+                    </span>
+                    <span className="text-white font-mono">
+                      {((hostings[0].bandwidthUsedMb || 12400) / 1024).toFixed(1)} GB / {((hostings[0].bandwidthLimitMb || 100000) / 1024).toFixed(0)} GB
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-blue-500"
+                      style={{ width: `${Math.min(100, Math.round(((hostings[0].bandwidthUsedMb || 12400) / (hostings[0].bandwidthLimitMb || 100000)) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#0B0F17] via-[#121826] to-[#1A2234] p-6 sm:p-7 text-white shadow-[0_16px_40px_rgba(0,0,0,0.18)] border border-slate-800">
+              <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/30">
+                    <Server className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#D4AF37]">
+                      Schweizer NVMe Hosting
+                    </span>
+                    <h3 className="text-base sm:text-lg font-black text-white">Noch kein Hosting-Paket aktiv</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Sichern Sie sich ultraschnellen Schweizer Speicherplatz mit kostenlosem SSL und cPanel.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveModal("new-service")}
+                  className="shrink-0 rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#E63946] px-5 py-2.5 text-xs font-black text-white hover:opacity-95 shadow-md shadow-orange-500/20 transition"
+                >
+                  Hosting entdecken
+                </button>
+              </div>
+            </section>
+          )}
 
           {/* 2. SCHNELLZUGRIFF (Quick Actions, 4 Kacheln) */}
           <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">

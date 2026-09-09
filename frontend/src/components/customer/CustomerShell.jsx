@@ -18,20 +18,21 @@ import {
   User,
   Shield,
   Menu,
-  X
+  X,
+  Layers
 } from "lucide-react";
 import Logo from "../Logo";
 
 export const PRIMARY_NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
-  { key: "services", label: "Meine Services", to: "/dashboard?tab=services", icon: Server },
+  { key: "servers", label: "Hosting-Center", to: "/dashboard?tab=servers", icon: Server },
+  { key: "services", label: "Meine Services", to: "/dashboard?tab=services", icon: Layers },
   { key: "domains", label: "Meine Domains", to: "/dashboard?tab=domains", icon: Globe },
   { key: "invoices", label: "Rechnungen", to: "/dashboard?tab=invoices", icon: FileText },
   { key: "support", label: "Support", to: "/support", icon: Headphones },
 ];
 
 export const MORE_NAV_ITEMS = [
-  { key: "servers", label: "Server-Steuerung", to: "/dashboard?tab=servers", icon: Terminal },
   { key: "licenses", label: "Lizenzen", to: "/dashboard?tab=licenses", icon: KeyRound },
   { key: "backorder", label: "Backorder", to: "/dashboard?tab=backorder", icon: History },
   { key: "offers", label: "Offerten", to: "/dashboard?tab=offers", icon: FileSpreadsheet },
