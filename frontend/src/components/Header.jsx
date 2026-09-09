@@ -102,9 +102,6 @@ export default function Header({ scrolled }) {
           <a href={cleanTel} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-sm font-semibold text-white/85 hover:text-[#FFC107] hover:border-white/20 transition-all">
             <Phone size={15} className="text-[#FFC107]" /> <span>{phone}</span>
           </a>
-          <button onClick={openContact} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-white/80 hover:text-[#FFC107]">
-            <Mail size={15} /> Kontakt
-          </button>
           {user ? (
             <a href={dashboardUrl} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-white hover:bg-white/10">
               <LayoutDashboard size={15} /> Dashboard
