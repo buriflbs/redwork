@@ -44,14 +44,14 @@ export default function Support() {
       setNewTicket({ subject: "", category: "", priority: "medium", message: "" });
       setShowNewTicket(false);
       fetchTickets();
-      alert("Destek talebi başarıyla oluşturuldu!");
+      alert("Support-Ticket wurde erfolgreich erstellt!");
     } catch (err) {
-      alert("Talep oluşturulamadı: " + (err.response?.data?.detail || err.message));
+      alert("Ticket konnte nicht erstellt werden: " + (err.response?.data?.detail || err.message));
     }
   };
 
   if (loading) {
-    return <CustomerShell active="support"><div className="py-20 text-center text-slate-500">Destek talepleri yükleniyor...</div></CustomerShell>;
+    return <CustomerShell active="support"><div className="py-20 text-center text-slate-500">Support-Tickets werden geladen...</div></CustomerShell>;
   }
 
   return (
@@ -59,19 +59,19 @@ export default function Support() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-[#0F172A]">Destek Talepleri</h1>
-            <p className="text-sm text-slate-500 mt-1">Teknik destek, faturalandırma veya genel sorularınız için 7/24 destek ekibimizle iletişime geçin.</p>
+            <h1 className="text-2xl sm:text-3xl font-black text-[#0F172A]">Support-Anfragen</h1>
+            <p className="text-sm text-slate-500 mt-1">Unser 24/7-Supportteam unterstützt Sie gerne bei technischen Fragen, Abrechnung oder Domains.</p>
           </div>
           <Button onClick={() => setShowNewTicket(true)} className="rounded-xl bg-[#E63946] hover:bg-[#d02f3c] text-white font-bold shadow-md">
             <Plus className="h-4 w-4 mr-2" />
-            Yeni Destek Talebi
+            Neues Ticket erstellen
           </Button>
         </div>
 
         {showNewTicket && (
           <Card className="rounded-[22px] border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
             <CardHeader>
-              <CardTitle className="text-lg font-bold text-[#0F172A]">Yeni Destek Talebi Oluştur</CardTitle>
+              <CardTitle className="text-lg font-bold text-[#0F172A]">Neues Support-Ticket erstellen</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={createTicket} className="space-y-4">
@@ -143,8 +143,8 @@ export default function Support() {
             <Card className="rounded-[22px] border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
               <CardContent className="py-12 text-center">
                 <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-[#0F172A] mb-2">Henüz destek talebi yok</h3>
-                <p className="text-slate-500 text-sm">Oluşturulmuş bir destek talebiniz bulunmuyor.</p>
+                <h3 className="text-lg font-bold text-[#0F172A] mb-2">Keine Support-Tickets vorhanden</h3>
+                <p className="text-slate-500 text-sm">Sie haben aktuell keine offenen oder geschlossenen Support-Anfragen.</p>
               </CardContent>
             </Card>
           ) : (
@@ -154,9 +154,9 @@ export default function Support() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <h3 className="text-base font-bold text-[#0F172A]">{ticket.subject}</h3>
-                      <p className="text-xs text-slate-500 mt-1">Talep #{ticket.id} • {ticket.category}</p>
+                      <p className="text-xs text-slate-500 mt-1">Ticket #{ticket.id} • {ticket.category}</p>
                       <p className="text-xs text-slate-400 mt-1">
-                        Oluşturulma: {new Date(ticket.createdAt).toLocaleDateString('tr-TR')}
+                        Erstellt am: {new Date(ticket.createdAt).toLocaleDateString('de-CH')}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -165,19 +165,19 @@ export default function Support() {
                         ticket.status === 'in_progress' ? 'default' :
                         ticket.status === 'answered' ? 'secondary' : 'outline'
                       }>
-                        {ticket.status === 'open' ? 'Açık' :
-                         ticket.status === 'in_progress' ? 'İşleniyor' :
-                         ticket.status === 'answered' ? 'Yanıtlandı' : 'Kapatıldı'}
+                        {ticket.status === 'open' ? 'Offen' :
+                         ticket.status === 'in_progress' ? 'In Bearbeitung' :
+                         ticket.status === 'answered' ? 'Beantwortet' : 'Geschlossen'}
                       </Badge>
                       <Badge variant={
                         ticket.priority === 'high' ? 'destructive' :
                         ticket.priority === 'medium' ? 'default' : 'secondary'
                       }>
-                        {ticket.priority === 'high' ? 'Yüksek' :
-                         ticket.priority === 'medium' ? 'Normal' : 'Düşük'}
+                        {ticket.priority === 'high' ? 'Hoch' :
+                         ticket.priority === 'medium' ? 'Normal' : 'Niedrig'}
                       </Badge>
                       <Button variant="outline" size="sm" asChild className="rounded-xl">
-                        <Link to={`/tickets/${ticket.id}`}>Görüntüle</Link>
+                        <Link to={`/tickets/${ticket.id}`}>Details anzeigen</Link>
                       </Button>
                     </div>
                   </div>

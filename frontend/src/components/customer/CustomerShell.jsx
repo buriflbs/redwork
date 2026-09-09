@@ -23,19 +23,19 @@ import {
 import Logo from "../Logo";
 
 export const CUSTOMER_NAV_ITEMS = [
-  { key: "dashboard", label: "Panelim", to: "/dashboard", icon: LayoutDashboard },
-  { key: "services", label: "Hizmetlerim", to: "/dashboard?tab=services", icon: Server },
-  { key: "licenses", label: "Lisanslarım", to: "/dashboard?tab=licenses", icon: KeyRound },
-  { key: "servers", label: "Sunucu Kontrol", to: "/dashboard?tab=servers", icon: Terminal },
-  { key: "domains", label: "Domainlerim", to: "/dashboard?tab=domains", icon: Globe },
+  { key: "dashboard", label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
+  { key: "services", label: "Meine Services", to: "/dashboard?tab=services", icon: Server },
+  { key: "licenses", label: "Lizenzen", to: "/dashboard?tab=licenses", icon: KeyRound },
+  { key: "servers", label: "Server-Steuerung", to: "/dashboard?tab=servers", icon: Terminal },
+  { key: "domains", label: "Meine Domains", to: "/dashboard?tab=domains", icon: Globe },
   { key: "backorder", label: "Backorder", to: "/dashboard?tab=backorder", icon: History },
-  { key: "invoices", label: "Faturalar", to: "/dashboard?tab=invoices", icon: FileText },
-  { key: "offers", label: "Teklifler", to: "/dashboard?tab=offers", icon: FileSpreadsheet },
-  { key: "support", label: "Destek", to: "/support", icon: Headphones },
-  { key: "affiliate", label: "Ortaklık", to: "/dashboard?tab=affiliate", icon: Users },
+  { key: "invoices", label: "Rechnungen", to: "/dashboard?tab=invoices", icon: FileText },
+  { key: "offers", label: "Offerten", to: "/dashboard?tab=offers", icon: FileSpreadsheet },
+  { key: "support", label: "Support", to: "/support", icon: Headphones },
+  { key: "affiliate", label: "Partnerprogramm", to: "/dashboard?tab=affiliate", icon: Users },
 ];
 
-export default function CustomerShell({ children, active = "dashboard", unreadCount = 0 }) {
+export default function CustomerShell({ children, active = "dashboard", unreadCount = 0, notifications = [] }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -62,7 +62,7 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
   const searchParams = new URLSearchParams(location.search);
   const currentTab = searchParams.get("tab") || (location.pathname === "/dashboard" ? "dashboard" : "");
 
-  const firstName = user?.firstName || user?.name || "Müşteri";
+  const firstName = user?.firstName || user?.name || "Kunde";
   const firstInitial = firstName.charAt(0).toUpperCase();
 
   return (
@@ -110,7 +110,7 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
               <button
                 onClick={() => setNotificationsOpen((prev) => !prev)}
                 className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-slate-50/70 text-slate-600 hover:bg-white hover:border-slate-300 hover:text-[#0F172A] transition shadow-sm"
-                aria-label="Bildirimler"
+                aria-label="Benachrichtigungen"
               >
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
@@ -121,12 +121,22 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
               {notificationsOpen && (
                 <div className="absolute right-0 mt-3 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-2">
-                    <span className="font-bold text-sm text-[#0F172A]">Bildirimler</span>
-                    <span className="text-xs text-slate-400">Son Hareketler</span>
+                    <span className="font-bold text-sm text-[#0F172A]">Benachrichtigungen</span>
+                    <span className="text-xs text-slate-400">Neueste Aktivitäten</span>
                   </div>
-                  <div className="py-4 text-center text-xs text-slate-400">
-                    Yeni okunmamış bildiriminiz yok.
-                  </div>
+                  {notifications && notifications.length > 0 ? (
+                    <div className="space-y-2 py-1 max-h-60 overflow-y-auto">
+                      {notifications.map((notif, idx) => (
+                        <div key={idx} className="p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                          <p className="font-semibold text-slate-800">{notif.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-4 text-center text-xs text-slate-400">
+                      Keine neuen Benachrichtigungen vorhanden.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -147,8 +157,8 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
               {userDropdownOpen && (
                 <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-slate-100 bg-white p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
                   <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Oturum Açıldı</p>
-                    <p className="text-sm font-bold text-[#0F172A] truncate">{user?.email || "Hesap"}</p>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Angemeldet als</p>
+                    <p className="text-sm font-bold text-[#0F172A] truncate">{user?.email || "Konto"}</p>
                   </div>
                   
                   <Link
@@ -156,7 +166,7 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
                     onClick={() => setUserDropdownOpen(false)}
                     className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-xl text-slate-700 hover:bg-slate-50 hover:text-[#FF7A00] transition"
                   >
-                    <User className="h-4 w-4 text-slate-400" /> Hesabım & Profil
+                    <User className="h-4 w-4 text-slate-400" /> Mein Konto & Profil
                   </Link>
 
                   <Link
@@ -164,7 +174,7 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
                     onClick={() => setUserDropdownOpen(false)}
                     className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-xl text-slate-700 hover:bg-slate-50 hover:text-[#FF7A00] transition"
                   >
-                    <Shield className="h-4 w-4 text-slate-400" /> Güvenlik & Şifre
+                    <Shield className="h-4 w-4 text-slate-400" /> Sicherheit & Passwort
                   </Link>
 
                   <div className="my-1 border-t border-slate-100" />
@@ -176,7 +186,7 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-xl text-red-600 hover:bg-red-50 transition"
                   >
-                    <LogOut className="h-4 w-4 text-red-500" /> Çıkış Yap
+                    <LogOut className="h-4 w-4 text-red-500" /> Abmelden
                   </button>
                 </div>
               )}
@@ -186,7 +196,7 @@ export default function CustomerShell({ children, active = "dashboard", unreadCo
             <button
               onClick={() => setMobileMenuOpen((prev) => !prev)}
               className="xl:hidden flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              aria-label="Menüyü Aç"
+              aria-label="Menü öffnen"
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>

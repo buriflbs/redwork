@@ -1444,11 +1444,11 @@ async def update_profile(payload: UserUpdateIn, user: dict = Depends(require_cus
     # Password change
     if payload.newPassword:
         if len(payload.newPassword) < 8:
-            raise HTTPException(400, "Yeni şifre en az 8 karakter olmalıdır")
+            raise HTTPException(400, "Das neue Passwort muss mindestens 8 Zeichen lang sein")
         if not payload.currentPassword:
-            raise HTTPException(400, "Mevcut şifrenizi girmelisiniz")
+            raise HTTPException(400, "Bitte geben Sie Ihr aktuelles Passwort ein")
         if not verify_password(payload.currentPassword, _password_hash_from_user(db_user)):
-            raise HTTPException(400, "Mevcut şifreniz hatalı")
+            raise HTTPException(400, "Das aktuelle Passwort ist falsch")
         update_data["passwordHash"] = hash_password(payload.newPassword)
 
     if update_data:
@@ -1852,7 +1852,7 @@ async def customer_dashboard(user=Depends(require_customer)):
     for inv in invoices:
         documents.append({
             "id": inv.get("id"),
-            "title": f"Fatura #{inv.get('number')}",
+            "title": f"Rechnung #{inv.get('number')}",
             "type": "invoice",
             "date": inv.get("createdAt"),
             "size": "PDF",
@@ -1868,9 +1868,11 @@ async def customer_dashboard(user=Depends(require_customer)):
     notifications = []
     overdue_count = len([inv for inv in invoices if inv.get("status") in {"overdue", "dunning_sent", "collection_warning"}])
     if overdue_count:
-        notifications.append({"type": "warning", "message": f"{overdue_count} fatura vadesi geçmiş durumda."})
+        rechnung_label = "Rechnung ist" if overdue_count == 1 else "Rechnungen sind"
+        notifications.append({"type": "warning", "message": f"{overdue_count} {rechnung_label} überfällig."})
     if open_tickets:
-        notifications.append({"type": "info", "message": f"{len(open_tickets)} açık destek talebi."})
+        ticket_label = "offene Support-Anfrage" if len(open_tickets) == 1 else "offene Support-Anfragen"
+        notifications.append({"type": "info", "message": f"{len(open_tickets)} {ticket_label}."})
     
     return {
         "customer": user,

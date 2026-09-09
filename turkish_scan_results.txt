@@ -1,0 +1,25 @@
+e:\AI\RedWork\frontend\src\components\customer\CustomerShell.jsx:159 [Profil] -> <User className="h-4 w-4 text-slate-400" /> Mein Konto & Profil
+e:\AI\RedWork\frontend\src\pages\Dashboard.jsx:165 [Profil] -> setProfileMsg({ type: "success", text: "Profil erfolgreich aktualisiert." });
+e:\AI\RedWork\frontend\src\pages\Dashboard.jsx:169 [Profil] -> setProfileMsg({ type: "error", text: err.response?.data?.detail || "Profil konnte nicht aktualisiert
+e:\AI\RedWork\frontend\src\pages\Dashboard.jsx:270 [Profil] -> {/* Profil-Informationen */}
+e:\AI\RedWork\frontend\src\pages\Dashboard.jsx:538 [Panelim] -> {/* RENDER MAIN DASHBOARD VIEW (Panelim) */}
+e:\AI\RedWork\frontend\src\pages\Kundendashboard.jsx:152 [Profil] -> Profil
+e:\AI\RedWork\frontend\src\pages\admin\AdminLayout.jsx:17 [Profil] -> { to: "/admin/profile", label: "Profil & Sicherheit", icon: ShieldCheck },
+e:\AI\RedWork\frontend\src\pages\admin\AdminProfile.jsx:80 [Profil] -> text: res.data?.message || "Admin-Profil erfolgreich aktualisiert!",
+e:\AI\RedWork\frontend\src\pages\admin\AdminProfile.jsx:83 [Profil] -> const detail = err.response?.data?.detail || "Profil konnte nicht aktualisiert werden.";
+e:\AI\RedWork\frontend\src\pages\admin\AdminProfile.jsx:150 [Profil] -> Admin-Profil & Zugangsdaten
+e:\AI\RedWork\frontend\src\pages\admin\AdminProfile.jsx:171 [Profil] -> <h2 className="text-lg font-bold text-[#0f172a]">Administrator Profil</h2>
+e:\AI\RedWork\frontend\src\pages\admin\AdminProfile.jsx:261 [Profil] -> <span>Profil-Änderungen speichern</span>
+e:\AI\RedWork\frontend\src\components\customer\CustomerShell.jsx:159 [Profil] -> <User className="h-4 w-4 text-slate-400" /> Mein Konto & Profil
+e:\AI\RedWork\backend\seed_data.py:89 [Profil] -> {"category": "SEO", "question": "Optimiert ihr für lokale Suchen?", "answer": "Ja. Google-Business-P
+e:\AI\RedWork\backend\server.py:1281 [Profil] -> "message": "Admin-Profil erfolgreich aktualisiert",
+e:\AI\RedWork\backend\server.py:1871 [fatura] -> notifications.append({"type": "warning", "message": f"{overdue_count} fatura vadesi geçmiş durumda."
+e:\AI\RedWork\backend\server.py:1873 [açık] -> notifications.append({"type": "info", "message": f"{len(open_tickets)} açık destek talebi."})
+e:\AI\RedWork\backend\venv\Lib\site-packages\pip\_vendor\pygments\lexers\_mapping.py:479 [sil] -> 'SilverLexer': ('pip._vendor.pygments.lexers.verification', 'Silver', ('silver',), ('*.sil', '*.vpr'
+e:\AI\RedWork\backend\venv\Lib\site-packages\stdnum\az\voen.py:21 [Vergi] -> """VÖEN (Vergi ödəyicisinin eyniləşdirmə nömrəsi, Azerbaijan tax number).
+e:\AI\RedWork\backend\venv\Lib\site-packages\stdnum\az\voen.py:23 [Vergi] -> The Vergi ödəyicisinin eyniləşdirmə nömrəsi is issued by the Azerbaijan state
+e:\AI\RedWork\backend\venv\Lib\site-packages\stdnum\tr\vkn.py:21 [Vergi] -> """VKN (Vergi Kimlik Numarası, Turkish tax identification number).
+e:\AI\RedWork\backend\venv\Lib\site-packages\stdnum\tr\vkn.py:23 [Vergi] -> The Vergi Kimlik Numarası is the Turkish tax identification number used for
+e:\AI\RedWork\backend\venv\Lib\site-packages\stdnum\tr\vkn.py:29 [vergi] -> * https://www.turkiye.gov.tr/gib-intvrg-vergi-kimlik-numarasi-dogrulama
+e:\AI\RedWork\backend\venv\Lib\site-packages\stdnum\tr\vkn.py:67 [Vergi] -> """Check if the number is a valid Vergi Kimlik Numarası. This checks the
+e:\AI\RedWork\backend\venv\Lib\site-packages\stdnum\tr\vkn.py:80 [Vergi] -> """Check if the number is a valid Vergi Kimlik Numarası. This checks the

@@ -110,12 +110,12 @@ export default function ProductMarketplace({ embedded = false }) {
         quantity: 1,
         domainChoice: domainChoices[product.id] || "later",
       });
-      setMessage(`Sipariş başarıyla oluşturuldu: ${res.data.reference || res.data.id}`);
+      setMessage(`Bestellung erfolgreich erstellt: ${res.data.reference || res.data.id}`);
       setTimeout(() => {
         navigate("/dashboard?tab=services");
       }, 1200);
     } catch (err) {
-      setMessage(err.response?.data?.detail || "Sipariş oluşturulamadı. Lütfen tekrar deneyin.");
+      setMessage(err.response?.data?.detail || "Bestellung konnte nicht erstellt werden. Bitte versuchen Sie es erneut.");
     } finally {
       setOrdering("");
     }
