@@ -64,12 +64,12 @@ export default function Header({ scrolled }) {
 
   return (
     <header className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${scrolled ? "bg-[#07090f]/95 shadow-2xl shadow-black/20 backdrop-blur-xl border-b border-white/10" : "bg-[#07090f]/90 backdrop-blur-md"}`}>
-      <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:py-3.5">
-        <a href="#top" onClick={(e) => handleNav(e, "#top")} className="shrink-0" aria-label="RedWORK Startseite">
+      <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-6 px-4 py-3 sm:px-6 lg:px-8 lg:py-3.5">
+        <a href="#top" onClick={(e) => handleNav(e, "#top")} className="shrink-0 -ml-1 sm:-ml-2 transition-transform hover:scale-105" aria-label="RedWORK Startseite">
           <Logo size="md" />
         </a>
 
-        <nav className="hidden xl:flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-2 shadow-inner">
+        <nav className="hidden xl:flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-2 shadow-inner ml-auto mr-4">
           {mainLinks.slice(0, 1).map((item) => (
             <a key={item.label} href={item.href} onClick={(e) => handleNav(e, item.href)} className="rounded-full px-3.5 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/10 hover:text-[#FFC107]">
               {item.label}
