@@ -19,13 +19,15 @@ import {
   Shield,
   Menu,
   X,
-  Layers
+  Layers,
+  ShoppingBag
 } from "lucide-react";
 import Logo from "../Logo";
 
 export const PRIMARY_NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
-  { key: "servers", label: "Hosting-Center", to: "/dashboard?tab=servers", icon: Server },
+  { key: "orders", label: "Meine Bestellungen", to: "/dashboard?tab=orders", icon: ShoppingBag },
+  { key: "servers", label: "Mein Hosting", to: "/dashboard?tab=servers", icon: Server },
   { key: "services", label: "Meine Services", to: "/dashboard?tab=services", icon: Layers },
   { key: "domains", label: "Meine Domains", to: "/dashboard?tab=domains", icon: Globe },
   { key: "invoices", label: "Rechnungen", to: "/dashboard?tab=invoices", icon: FileText },

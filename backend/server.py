@@ -2352,14 +2352,16 @@ async def add_ticket_reply(ticket_id: str, payload: TicketReplyIn, user=Depends(
 # ----------------------------------------------------------------------------
 @api_router.get("/dashboard")
 async def customer_dashboard(user=Depends(require_customer)):
-    active_orders = await db.orders.find({"userId": user["id"], "status": {"$in": ["active", "paid"]}}).sort("createdAt", -1).to_list(50)
-    recent_orders = await db.orders.find({"userId": user["id"]}).sort("createdAt", -1).limit(5).to_list(5)
+    all_customer_orders = await db.orders.find({"userId": user["id"]}).sort("createdAt", -1).to_list(100)
+    active_orders = [o for o in all_customer_orders if o.get("status") in ["active", "paid"]]
+    pending_orders = [o for o in all_customer_orders if o.get("status") == "pending"]
+    recent_orders = all_customer_orders[:5]
     open_tickets = await db.tickets.find({"userId": user["id"], "status": {"$nin": ["closed"]}}).sort("updatedAt", -1).to_list(10)
     invoices = await db.invoices.find({"userId": user["id"], "type": "invoice"}).sort("createdAt", -1).to_list(20)
     products = await db.products.find().to_list(1000)
     product_map = {p["id"]: clean(p) for p in products}
 
-    for order in active_orders + recent_orders:
+    for order in all_customer_orders:
         product = product_map.get(order.get("productId"))
         if product:
             order["productName"] = product.get("name", "")
@@ -2380,14 +2382,15 @@ async def customer_dashboard(user=Depends(require_customer)):
         activities.append({"type": "ticket", "message": f"Ticket '{t['subject']}' aktualisiert", "date": t["updatedAt"]})
     for inv in invoices[:2]:
         activities.append({"type": "invoice", "message": f"Rechnung {inv['number']} erstellt", "date": inv["createdAt"]})
-    activities.sort(key=lambda x: x["date"], reverse=True)
+    activities.sort(key=lambda x: x["date"] if isinstance(x["date"], datetime) else str(x["date"]), reverse=True)
 
     service_keywords = ("hosting", "domain", "e-mail", "email", "wartung", "seo", "support", "webdesign", "webentwicklung", "software")
     services = []
     hosting = []
     domains = []
     email_services = []
-    for order in active_orders:
+    # Include both active, paid and pending orders in services so newly placed orders are visible
+    for order in all_customer_orders:
         name = (order.get("productName") or "").lower()
         description = (order.get("productDescription") or "").lower()
         text = f"{name} {description}"
@@ -2405,11 +2408,13 @@ async def customer_dashboard(user=Depends(require_customer)):
     in_30_days = now + timedelta(days=30)
     upcoming_renewals = []
     for order in active_orders:
-        # Check order renewal date or created date + duration
         created = order.get("createdAt")
         duration = order.get("duration", "monthly")
         days = 365 if duration == "yearly" else (730 if duration == "two_years" else 30)
         if isinstance(created, datetime):
+            # Normalize created to UTC aware datetime to prevent offset-naive vs offset-aware comparison
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
             renewal_date = created + timedelta(days=days)
             if now <= renewal_date <= in_30_days:
                 upcoming_renewals.append({
@@ -2464,7 +2469,9 @@ async def customer_dashboard(user=Depends(require_customer)):
     
     return {
         "customer": user,
+        "orders": [clean(o) for o in all_customer_orders],
         "activeOrders": [clean(o) for o in active_orders],
+        "pendingOrders": [clean(o) for o in pending_orders],
         "recentOrders": [clean(o) for o in recent_orders],
         "openTickets": [clean(o) for o in open_tickets],
         "invoices": [clean(inv) for inv in invoices],

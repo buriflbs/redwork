@@ -45,7 +45,9 @@ import {
   Database,
   Cpu,
   Zap,
-  Sparkles
+  Sparkles,
+  ShoppingBag,
+  Package
 } from "lucide-react";
 
 const fmtDate = (value) => {
@@ -128,6 +130,8 @@ export default function Dashboard() {
   }, []);
 
   const customer = data?.customer || user || {};
+  const allOrders = data?.orders || data?.activeOrders || [];
+  const pendingOrders = data?.pendingOrders || [];
   const activeServices = data?.services || data?.activeOrders || [];
   const domains = data?.domains || [];
   const openInvoices = data?.openInvoices || [];
@@ -314,6 +318,185 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* RENDER TAB: MEINE BESTELLUNGEN (Orders) */}
+      {currentTab === "orders" && (
+        <div className="space-y-8 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <span className="text-[11px] font-black uppercase tracking-widest text-[#FF7A00] bg-orange-50 px-2.5 py-1 rounded-md border border-orange-200">
+                  Bestellübersicht
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-black text-[#0F172A] tracking-tight">Meine Bestellungen</h1>
+              </div>
+              <p className="text-sm text-slate-500 mt-1">
+                Alle getätigten Bestellungen, Auftragsstatus, Rechnungsreferenzen und Aktivierungen auf einen Blick.
+              </p>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <Link
+                to="/hosting"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#E63946] px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-orange-500/20 hover:opacity-95 transition"
+              >
+                <PlusCircle className="h-4 w-4" /> Neues Produkt bestellen
+              </Link>
+            </div>
+          </div>
+
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-2xl bg-white p-5 border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Gesamtbestellungen</span>
+                <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <ShoppingBag className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-2 text-2xl font-black text-[#0F172A]">{allOrders.length}</p>
+              <p className="text-xs text-slate-400 mt-1">In Ihrem Kundenkonto erfasst</p>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Aktive Dienste</span>
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-2 text-2xl font-black text-emerald-600">
+                {allOrders.filter((o) => o.status === "active" || o.status === "paid").length}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">Bereitgestellt & betriebsbereit</p>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">In Bearbeitung</span>
+                <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Clock className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-2 text-2xl font-black text-amber-600">
+                {allOrders.filter((o) => o.status === "pending").length}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">Provisionierung / Zahlung</p>
+            </div>
+          </div>
+
+          {/* Orders Table / Cards */}
+          <div className="rounded-[22px] bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-slate-100">
+            <h2 className="text-lg font-bold text-[#0F172A] mb-4 flex items-center justify-between">
+              <span>Bestellhistorie</span>
+              <span className="text-xs font-normal text-slate-400">{allOrders.length} Positionen</span>
+            </h2>
+
+            {allOrders.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-12 text-center">
+                <ShoppingBag className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                <h3 className="text-base font-bold text-[#0F172A]">Noch keine Bestellungen vorhanden</h3>
+                <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+                  Sie haben aktuell noch keine Hosting- oder Server-Produkte bestellt. Entdecken Sie unsere Premium-Hosting-Tarife.
+                </p>
+                <Link
+                  to="/hosting"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#E63946] px-5 py-2.5 text-xs font-black text-white shadow-md hover:opacity-95 transition"
+                >
+                  Jetzt Tarife ansehen
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      <th className="pb-3 pr-4">Referenz / ID</th>
+                      <th className="pb-3 px-4">Produkt / Service</th>
+                      <th className="pb-3 px-4">Domain / Konfiguration</th>
+                      <th className="pb-3 px-4">Datum</th>
+                      <th className="pb-3 px-4">Laufzeit</th>
+                      <th className="pb-3 px-4">Betrag</th>
+                      <th className="pb-3 px-4">Status</th>
+                      <th className="pb-3 pl-4 text-right">Aktion</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {allOrders.map((order) => {
+                      const isPending = order.status === "pending";
+                      const isActive = order.status === "active" || order.status === "paid";
+                      const isHosting = (order.productName || "").toLowerCase().includes("hosting") || (order.productName || "").toLowerCase().includes("server");
+
+                      return (
+                        <tr key={order.id} className="hover:bg-slate-50/70 transition">
+                          <td className="py-4 pr-4">
+                            <span className="font-mono font-bold text-xs text-[#0F172A]">
+                              {order.reference || `#${order.id?.slice(0, 8)}`}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-[#0F172A]">{order.productName || "Webhosting / Cloud"}</div>
+                            {order.productSku && (
+                              <div className="text-[11px] text-slate-400">SKU: {order.productSku}</div>
+                            )}
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="font-mono text-xs text-slate-700">
+                              {order.domainName || order.domainChoice || "Keine Domain angegeben"}
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-xs text-slate-500 whitespace-nowrap">
+                            {fmtDate(order.createdAt)}
+                          </td>
+                          <td className="py-4 px-4 text-xs text-slate-600">
+                            {order.duration === "yearly" ? "12 Monate" : (order.duration === "two_years" ? "24 Monate" : "Monatlich")}
+                          </td>
+                          <td className="py-4 px-4 font-bold text-[#0F172A] whitespace-nowrap">
+                            {money(order.total, order.currency || currency)}
+                          </td>
+                          <td className="py-4 px-4 whitespace-nowrap">
+                            {isActive ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Aktiv
+                              </span>
+                            ) : isPending ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 border border-amber-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                In Bearbeitung
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                                {order.status}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 pl-4 text-right whitespace-nowrap">
+                            {isHosting ? (
+                              <Link
+                                to="/dashboard?tab=servers"
+                                className="inline-flex items-center gap-1 rounded-lg bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-800 transition"
+                              >
+                                Zum Hosting <ChevronRight className="h-3.5 w-3.5" />
+                              </Link>
+                            ) : (
+                              <button
+                                onClick={() => navigate("/dashboard?tab=invoices")}
+                                className="inline-flex items-center gap-1 rounded-lg bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-800 transition"
+                              >
+                                Rechnung <ChevronRight className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* RENDER TAB: SERVICES */}
       {currentTab === "services" && (
         <div className="space-y-8 animate-in fade-in duration-200">
@@ -348,19 +531,32 @@ export default function Dashboard() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-bold text-[#0F172A]">{service.productName || "REDWORK Service"}</p>
-                          <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-600">AKTIV</span>
+                          {service.status === "pending" ? (
+                            <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-600 border border-amber-200">IN BEARBEITUNG</span>
+                          ) : (
+                            <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-600 border border-emerald-200">AKTIV</span>
+                          )}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">{service.domainName || service.domainChoice || service.reference || `Bestellung #${service.id}`}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-xs text-slate-400">Startdatum: {fmtDate(service.activatedAt || service.createdAt)}</span>
-                      <button
-                        onClick={() => alert(`Service-Steuerung für #${service.id} wird geöffnet.`)}
-                        className="rounded-lg bg-white border border-slate-200 px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-sm"
-                      >
-                        Verwalten
-                      </button>
+                      <span className="text-xs text-slate-400">Bestelldatum: {fmtDate(service.createdAt || service.activatedAt)}</span>
+                      {(service.productName || "").toLowerCase().includes("hosting") || (service.productName || "").toLowerCase().includes("server") ? (
+                        <Link
+                          to="/dashboard?tab=servers"
+                          className="rounded-lg bg-white border border-slate-200 px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-sm inline-flex items-center gap-1"
+                        >
+                          Hosting-Verwaltung <ChevronRight className="h-3 w-3" />
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={() => alert(`Service-Steuerung für #${service.id} wird geöffnet.`)}
+                          className="rounded-lg bg-white border border-slate-200 px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-sm"
+                        >
+                          Verwalten
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -640,7 +836,7 @@ export default function Dashboard() {
                 <span className="text-[11px] font-black uppercase tracking-widest text-[#D4AF37] bg-[#D4AF37]/10 px-2.5 py-1 rounded-md border border-[#D4AF37]/30">
                   Ultra Premium
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-black text-[#0F172A] tracking-tight">Hosting Control Center</h2>
+                <h2 className="text-2xl sm:text-3xl font-black text-[#0F172A] tracking-tight">Mein Hosting & Cloud</h2>
               </div>
               <p className="mt-1.5 text-sm text-slate-500">
                 Schweizer Hochleistungs-Webhosting, WHM / cPanel Cloud-Verwaltung und Echtzeit-Ressourcenkontrolle.
@@ -1242,18 +1438,22 @@ export default function Dashboard() {
 
                 {/* Mini Badges */}
                 <div className="mt-5 flex flex-wrap items-center gap-2.5 text-xs font-semibold">
-                  <div className="flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-white/90 backdrop-blur-md border border-white/10 shadow-sm">
+                  <Link to="/dashboard?tab=orders" className="flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-white/90 backdrop-blur-md border border-white/10 shadow-sm hover:bg-white/20 transition">
+                    <ShoppingBag className="h-3.5 w-3.5 text-orange-400" />
+                    <span>{allOrders.length} Bestellungen</span>
+                  </Link>
+                  <Link to="/dashboard?tab=servers" className="flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-white/90 backdrop-blur-md border border-white/10 shadow-sm hover:bg-white/20 transition">
                     <Server className="h-3.5 w-3.5 text-blue-400" />
                     <span>{activeServices.length} aktive Services</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-white/90 backdrop-blur-md border border-white/10 shadow-sm">
+                  </Link>
+                  <Link to="/dashboard?tab=domains" className="flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-white/90 backdrop-blur-md border border-white/10 shadow-sm hover:bg-white/20 transition">
                     <Globe className="h-3.5 w-3.5 text-cyan-400" />
                     <span>{domains.length} Domains</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-white/90 backdrop-blur-md border border-white/10 shadow-sm">
+                  </Link>
+                  <Link to="/dashboard?tab=invoices" className="flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-white/90 backdrop-blur-md border border-white/10 shadow-sm hover:bg-white/20 transition">
                     <FileText className="h-3.5 w-3.5 text-amber-400" />
                     <span>{openInvoices.length} offene Rechnungen</span>
-                  </div>
+                  </Link>
                 </div>
               </div>
 
