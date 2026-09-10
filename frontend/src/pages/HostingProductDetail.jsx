@@ -104,7 +104,40 @@ export default function HostingProductDetail() {
 
         if (matched) {
           setCurrentProduct(matched);
-          document.title = `${matched.name} | Webhosting Schweiz | RedWORK`;
+          const pageTitle = `${matched.name} | High-End Webhosting Schweiz | RedWORK`;
+          document.title = pageTitle;
+
+          // Set canonical link
+          let canonical = document.querySelector("link[rel='canonical']");
+          if (!canonical) {
+            canonical = document.createElement("link");
+            canonical.rel = "canonical";
+            document.head.appendChild(canonical);
+          }
+          canonical.href = window.location.href;
+
+          // Set meta description
+          let metaDesc = document.querySelector("meta[name='description']");
+          if (!metaDesc) {
+            metaDesc = document.createElement("meta");
+            metaDesc.name = "description";
+            document.head.appendChild(metaDesc);
+          }
+          metaDesc.content = matched.description || `${matched.name} – Modernes High-Performance Webhosting auf Schweizer NVMe-Servern mit garantierter Uptime und persönlichem Support.`;
+
+          // Set OpenGraph tags
+          const setOg = (property, content) => {
+            let el = document.querySelector(`meta[property='${property}']`);
+            if (!el) {
+              el = document.createElement("meta");
+              el.setAttribute("property", property);
+              document.head.appendChild(el);
+            }
+            el.setAttribute("content", content);
+          };
+          setOg("og:title", pageTitle);
+          setOg("og:description", metaDesc.content);
+          setOg("og:type", "product");
         } else {
           setError("Das gewünschte Hosting-Produkt konnte nicht gefunden werden.");
         }
@@ -195,8 +228,28 @@ export default function HostingProductDetail() {
       datacenter: Building2
     };
 
-    // If technicalDetails is a map/object
-    if (typeof details === "object" && !Array.isArray(details)) {
+    // If technicalDetails is an Array of strings (e.g., 'Speicherplatz: 10 GB NVMe SSD')
+    if (Array.isArray(details) && details.length > 0) {
+      details.forEach((item) => {
+        if (typeof item === "string" && item.includes(":")) {
+          const [k, ...rest] = item.split(":");
+          const key = k.trim();
+          const value = rest.join(":").trim();
+          const lowerKey = key.toLowerCase();
+          let Icon = CheckCircle2;
+          for (const [km, ic] of Object.entries(iconMap)) {
+            if (lowerKey.includes(km)) {
+              Icon = ic;
+              break;
+            }
+          }
+          specs.push({ key, value, Icon });
+        } else if (typeof item === "string") {
+          specs.push({ key: item, value: "Inklusive", Icon: CheckCircle2 });
+        }
+      });
+    } else if (typeof details === "object" && details !== null) {
+      // If technicalDetails is a map/object
       Object.entries(details).forEach(([key, val]) => {
         if (!val) return;
         const lowerKey = key.toLowerCase();
