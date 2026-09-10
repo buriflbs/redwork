@@ -126,17 +126,19 @@ export default function HostingLanding() {
   const pPro = coreProducts[1] || null;
   const pEnterprise = coreProducts[2] || null;
 
+  const getProductUrl = (p) => {
+    if (!p) return "/hosting/webhosting";
+    const cat = p.menuSubcategory || "webhosting";
+    const slug = p.slug || (p.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    return `/hosting/${cat}/${slug}`;
+  };
+
   const handleOrder = (product) => {
     if (!product || !product.id) {
       navigate("/hosting/webhosting");
       return;
     }
-    if (!user) {
-      sessionStorage.setItem("redwork_pending_product_id", product.id);
-      navigate("/login");
-      return;
-    }
-    navigate(`/dashboard/products/${product.id}`);
+    navigate(getProductUrl(product));
   };
 
   const handleDetails = (product) => {
@@ -144,7 +146,7 @@ export default function HostingLanding() {
       navigate("/hosting/webhosting");
       return;
     }
-    navigate(`/products/${product.id}`);
+    navigate(getProductUrl(product));
   };
 
   // Dynamic comparison table completely derived from actual database attributes

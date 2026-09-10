@@ -599,6 +599,8 @@ class ProductIn(BaseModel):
     showInMenu: bool = True
     menuSubcategory: Optional[str] = ""  # webhosting | reseller | server | special
     iconName: Optional[str] = ""
+    slug: Optional[str] = ""
+    targetAudience: Optional[str] = ""
 
 
 class Product(ProductIn):
@@ -1622,7 +1624,19 @@ async def list_products():
 
 @api_router.get("/products/{product_id}")
 async def get_product(product_id: str):
-    product = await db.products.find_one({"id": product_id, "status": {"$ne": "inactive"}})
+    identifier = product_id.strip()
+    product = await db.products.find_one({
+        "$and": [
+            {"status": {"$ne": "inactive"}},
+            {
+                "$or": [
+                    {"id": identifier},
+                    {"slug": identifier.lower()},
+                    {"name": {"$regex": f"^{re.escape(identifier)}$", "$options": "i"}}
+                ]
+            }
+        ]
+    })
     if not product:
         raise HTTPException(404, "Produkt nicht gefunden")
     category = await db.product_categories.find_one({"id": product.get("categoryId", "")})

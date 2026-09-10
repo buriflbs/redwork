@@ -83,12 +83,10 @@ export default function CategoryPage() {
   const catDesc = categoryData?.description || "Hochleistungs-Infrastruktur mit garantierter Performance und 100% Schweizer Datenspeicherung.";
 
   const handleOrder = (product) => {
-    if (!user) {
-      sessionStorage.setItem("redwork_pending_product_id", product.id);
-      navigate("/login");
-      return;
-    }
-    navigate(`/dashboard/products/${product.id}`);
+    if (!product) return;
+    const cat = product.menuSubcategory || slug || "webhosting";
+    const pSlug = product.slug || (product.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    navigate(`/hosting/${cat}/${pSlug}`);
   };
 
   const calculatePrice = (basePrice) => {

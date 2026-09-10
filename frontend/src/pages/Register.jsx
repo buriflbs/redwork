@@ -57,6 +57,19 @@ export default function Register() {
       
       setSuccess("Konto erfolgreich erstellt! Weiterleitung...");
       window.setTimeout(() => {
+        const pendingRedirect = sessionStorage.getItem("redwork_pending_redirect");
+        if (pendingRedirect) {
+          sessionStorage.removeItem("redwork_pending_redirect");
+          navigate(pendingRedirect, { replace: true });
+          return;
+        }
+
+        const pendingProd = sessionStorage.getItem("redwork_pending_product_id");
+        if (pendingProd) {
+          navigate(`/dashboard/products/${pendingProd}`, { replace: true });
+          return;
+        }
+
         navigate("/dashboard", { replace: true });
       }, 1500);
     } catch (err) {

@@ -26,6 +26,7 @@ import ContactModal from "./components/ContactModal";
 import FloatingCTA from "./components/FloatingCTA";
 import CategoryPage from "./pages/CategoryPage";
 import HostingLanding from "./pages/HostingLanding";
+import HostingProductDetail from "./pages/HostingProductDetail";
 
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminProfile from "./pages/admin/AdminProfile";
@@ -113,6 +114,7 @@ function App() {
             <Routes>
               <Route path="/" element={<PublicSite />} />
               <Route path="/hosting" element={<HostingLanding />} />
+              <Route path="/hosting/:categorySlug/:productSlug" element={<HostingProductDetail />} />
               <Route path="/hosting/:categorySlug" element={<CategoryPage />} />
               <Route path="/domains" element={<PublicSite />} />
 

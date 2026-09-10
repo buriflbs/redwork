@@ -43,6 +43,20 @@ export default function Login() {
       }
 
       await customerLogin(form.email, form.password);
+      
+      const pendingRedirect = sessionStorage.getItem("redwork_pending_redirect");
+      if (pendingRedirect) {
+        sessionStorage.removeItem("redwork_pending_redirect");
+        navigate(pendingRedirect, { replace: true });
+        return;
+      }
+
+      const pendingProd = sessionStorage.getItem("redwork_pending_product_id");
+      if (pendingProd) {
+        navigate(`/dashboard/products/${pendingProd}`, { replace: true });
+        return;
+      }
+
       navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(getApiErrorMessage(err, "Anmeldung fehlgeschlagen"));
