@@ -22,7 +22,7 @@ const EMPTY_PROD = {
   image: "",
   availability: "available",
 };
-const EMPTY_CAT = { name: "", description: "", order: 0 };
+const EMPTY_CAT = { name: "", slug: "", description: "", icon: "Server", seoTitle: "", seoDescription: "", showInMenu: true, isActive: true, order: 0 };
 
 const inp = "w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-[#1E88E5] focus:outline-none text-sm bg-white text-[#0f172a]";
 
@@ -249,7 +249,37 @@ export default function Products() {
       {editingCat && (
         <Modal title={editingCat.id ? "Kategorie bearbeiten" : "Neue Kategorie"} onClose={() => setEditingCat(null)}>
           <Field label="Name *"><input value={editingCat.name} onChange={(e) => setEditingCat({ ...editingCat, name: e.target.value })} data-testid="cat-name" className={inp} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Slug (URL-Pfad, z.B. webhosting)">
+              <input value={editingCat.slug || ""} onChange={(e) => setEditingCat({ ...editingCat, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })} placeholder="webhosting" className={inp} />
+            </Field>
+            <Field label="Sortierung">
+              <input type="number" value={editingCat.order || 0} onChange={(e) => setEditingCat({ ...editingCat, order: e.target.value })} className={inp} />
+            </Field>
+          </div>
           <Field label="Beschreibung"><textarea value={editingCat.description || ""} onChange={(e) => setEditingCat({ ...editingCat, description: e.target.value })} rows={2} className={inp} /></Field>
+          <Field label="SEO Seitentitel (z.B. Webhosting Schweiz | NVMe Cloud)"><input value={editingCat.seoTitle || ""} onChange={(e) => setEditingCat({ ...editingCat, seoTitle: e.target.value })} className={inp} /></Field>
+          <Field label="SEO Meta-Beschreibung"><textarea value={editingCat.seoDescription || ""} onChange={(e) => setEditingCat({ ...editingCat, seoDescription: e.target.value })} rows={2} className={inp} /></Field>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editingCat.showInMenu !== false}
+                onChange={(e) => setEditingCat({ ...editingCat, showInMenu: e.target.checked })}
+                className="rounded text-[#FF7A00]"
+              />
+              <span>Im Menü anzeigen</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editingCat.isActive !== false}
+                onChange={(e) => setEditingCat({ ...editingCat, isActive: e.target.checked })}
+                className="rounded text-emerald-600"
+              />
+              <span>Aktiv</span>
+            </label>
+          </div>
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
             <button onClick={() => setEditingCat(null)} className="px-4 py-2.5 rounded-lg bg-slate-100 text-[#0f172a] font-bold text-sm">Abbrechen</button>
             <button onClick={saveCat} disabled={!editingCat.name} data-testid="save-cat-btn" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#E63946] hover:bg-[#c5303d] disabled:opacity-50 text-white font-bold text-sm"><Save size={15} /> Speichern</button>

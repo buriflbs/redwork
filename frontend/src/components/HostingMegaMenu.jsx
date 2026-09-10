@@ -12,7 +12,6 @@ import {
   Zap,
   Sparkles,
   ArrowRight,
-  ExternalLink,
   Users,
   HardDrive,
   Cloud
@@ -80,6 +79,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
     {
       title: "WEBHOSTING",
       description: "NVMe SSD Webspace",
+      categoryLink: "/hosting/webhosting",
       items: [
         {
           name: "Linux Webhosting",
@@ -87,7 +87,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Terminal,
           badge: "BELIEBT",
           badgeColor: "bg-[#FF7A00]/15 text-[#FF7A00] border-[#FF7A00]/30",
-          to: pWebBasic ? `/products/${pWebBasic.id}` : "/products?category=hosting",
+          to: pWebBasic ? `/products/${pWebBasic.id}` : "/hosting/webhosting",
           price: pWebBasic ? `CHF ${Number(pWebBasic.unitPrice).toFixed(2)}/Mt.` : "CHF 9.90/Mt."
         },
         {
@@ -96,7 +96,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Layers,
           badge: "EMPFOHLEN",
           badgeColor: "bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/30",
-          to: pWebPro ? `/products/${pWebPro.id}` : "/products?category=hosting",
+          to: pWebPro ? `/products/${pWebPro.id}` : "/hosting/webhosting",
           price: pWebPro ? `CHF ${Number(pWebPro.unitPrice).toFixed(2)}/Mt.` : "CHF 19.90/Mt."
         },
         {
@@ -105,7 +105,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Zap,
           badge: "PREMIUM",
           badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-          to: pWebEnt ? `/products/${pWebEnt.id}` : "/products?category=hosting",
+          to: pWebEnt ? `/products/${pWebEnt.id}` : "/hosting/webhosting",
           price: pWebEnt ? `CHF ${Number(pWebEnt.unitPrice).toFixed(2)}/Mt.` : "CHF 49.90/Mt."
         }
       ]
@@ -113,6 +113,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
     {
       title: "RESELLER & BUSINESS",
       description: "White-Label und Agenturen",
+      categoryLink: "/hosting/reseller",
       items: [
         {
           name: "Reseller Hosting",
@@ -120,21 +121,21 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Users,
           badge: "WHM INKL.",
           badgeColor: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
-          to: "/products?category=reseller",
+          to: "/hosting/reseller",
           price: "Ab CHF 39.00/Mt."
         },
         {
           name: "WHM / cPanel Cloud",
           description: "Vollständige Mehrmandanten-Verwaltung",
           icon: Server,
-          to: "/products?category=hosting",
+          to: "/hosting/reseller",
           price: "Integrierte Cloud"
         },
         {
           name: "Agentur & Corporate",
           description: "Multi-Account Architektur mit Team-Zugängen",
           icon: ShieldCheck,
-          to: "/products?category=hosting",
+          to: "/hosting/reseller",
           price: "Skalierbar"
         }
       ]
@@ -142,6 +143,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
     {
       title: "SERVER & INFRASTRUKTUR",
       description: "Dedizierte Rechenleistung",
+      categoryLink: "/hosting/server",
       items: [
         {
           name: "Cloud VPS Server",
@@ -149,14 +151,14 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Cpu,
           badge: "SCHNELL",
           badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-          to: pVpsBasic ? `/products/${pVpsBasic.id}` : "/products?category=server",
+          to: pVpsBasic ? `/products/${pVpsBasic.id}` : "/hosting/vps",
           price: pVpsBasic ? `CHF ${Number(pVpsBasic.unitPrice).toFixed(2)}/Mt.` : "CHF 29.90/Mt."
         },
         {
           name: "VPS Professional",
           description: "Hohe Rechenleistung für Datenbanken und Apps",
           icon: HardDrive,
-          to: pVpsPro ? `/products/${pVpsPro.id}` : "/products?category=server",
+          to: pVpsPro ? `/products/${pVpsPro.id}` : "/hosting/vps",
           price: pVpsPro ? `CHF ${Number(pVpsPro.unitPrice).toFixed(2)}/Mt.` : "CHF 49.90/Mt."
         },
         {
@@ -165,7 +167,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Cloud,
           badge: "HIGH-END",
           badgeColor: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-          to: pDedicated ? `/products/${pDedicated.id}` : "/products?category=server",
+          to: pDedicated ? `/products/${pDedicated.id}` : "/hosting/dedicated",
           price: pDedicated ? `CHF ${Number(pDedicated.unitPrice).toFixed(2)}/Mt.` : "CHF 149.90/Mt."
         }
       ]
@@ -173,6 +175,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
     {
       title: "SPEZIAL-LÖSUNGEN",
       description: "Massgeschneiderte Dienste",
+      categoryLink: "/hosting/wordpress",
       items: [
         {
           name: "WordPress Hosting",
@@ -180,21 +183,21 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Sparkles,
           badge: "1-KLICK",
           badgeColor: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-          to: "/products?category=hosting",
+          to: "/hosting/wordpress",
           price: "Optimiert"
         },
         {
           name: "Business Mail Hosting",
           description: "Eigene Domain-Adressen, IMAP/POP3 und Anti-Spam",
           icon: Mail,
-          to: "/products?category=email",
+          to: "/hosting/email",
           price: "Inkl. Webmail"
         },
         {
           name: "Managed Server-Wartung",
           description: "24/7 Monitoring, Sicherheits-Patches und Backups",
           icon: Shield,
-          to: "/products?category=wartung",
+          to: "/hosting/managed-services",
           price: "Rundum-Sorglos"
         }
       ]
@@ -224,7 +227,9 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
         {menuCategories.map((cat, idx) => (
           <div key={idx} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 space-y-2">
             <div className="flex items-center justify-between pb-1.5 border-b border-white/5">
-              <span className="text-xs font-black uppercase tracking-wider text-[#D4AF37]">{cat.title}</span>
+              <Link to={cat.categoryLink} onClick={onClose} className="text-xs font-black uppercase tracking-wider text-[#D4AF37] hover:underline">
+                {cat.title}
+              </Link>
               <span className="text-[10px] text-slate-400">{cat.description}</span>
             </div>
             <div className="grid gap-2">
@@ -263,11 +268,11 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
 
         <div className="pt-2">
           <Link
-            to="/products?category=hosting"
+            to="/hosting/webhosting"
             onClick={onClose}
             className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#FF7A00] to-[#E63946] py-3 text-xs font-black text-white shadow-md"
           >
-            <span>Alle Hosting-Pakete vergleichen</span>
+            <span>Alle Webhosting-Tarife ansehen</span>
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
@@ -334,11 +339,18 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 py-6">
         {menuCategories.map((cat, idx) => (
           <div key={idx} className="space-y-3.5">
-            <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-[#D4AF37]">
-                {cat.title}
-              </h3>
-              <p className="text-[11px] text-slate-400">{cat.description}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <Link
+                  to={cat.categoryLink}
+                  onClick={onClose}
+                  className="text-xs font-black uppercase tracking-wider text-[#D4AF37] hover:text-white transition inline-flex items-center gap-1"
+                >
+                  <span>{cat.title}</span>
+                  <ArrowRight className="h-3 w-3 opacity-60" />
+                </Link>
+                <p className="text-[11px] text-slate-400">{cat.description}</p>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -396,23 +408,21 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
 
         <div className="flex flex-wrap items-center gap-3">
           <Link
-            to="/products?category=hosting"
+            to="/hosting/webhosting"
             onClick={onClose}
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#E63946] px-5 py-2.5 text-xs font-black text-white shadow-md shadow-orange-500/25 hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition"
           >
-            <span>Alle Hosting-Produkte vergleichen</span>
+            <span>Webhosting-Tarife vergleichen</span>
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
-          {pHostingPrem && (
-            <Link
-              to={`/products/${pHostingPrem.id}`}
-              onClick={onClose}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-xs font-bold text-white transition"
-            >
-              <span>Premium Hosting</span>
-              <Sparkles className="h-3.5 w-3.5 text-[#D4AF37]" />
-            </Link>
-          )}
+          <Link
+            to="/hosting/server"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-xs font-bold text-white transition"
+          >
+            <span>Cloud & Bare-Metal Server</span>
+            <Sparkles className="h-3.5 w-3.5 text-[#D4AF37]" />
+          </Link>
         </div>
       </div>
     </div>

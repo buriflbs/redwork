@@ -24,6 +24,7 @@ import Footer from "./components/Footer";
 import QuoteWizard from "./components/QuoteWizard";
 import ContactModal from "./components/ContactModal";
 import FloatingCTA from "./components/FloatingCTA";
+import CategoryPage from "./pages/CategoryPage";
 
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminProfile from "./pages/admin/AdminProfile";
@@ -110,7 +111,8 @@ function App() {
           <ModalProvider>
             <Routes>
               <Route path="/" element={<PublicSite />} />
-              <Route path="/hosting" element={<PublicSite />} />
+              <Route path="/hosting" element={<CategoryPage />} />
+              <Route path="/hosting/:categorySlug" element={<CategoryPage />} />
               <Route path="/domains" element={<PublicSite />} />
 
               {/* Auth Routes */}

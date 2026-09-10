@@ -561,7 +561,13 @@ class Company(CompanyIn):
 # ----- Product Category & Product (catalogue) -----
 class ProductCategoryIn(BaseModel):
     name: str
+    slug: Optional[str] = ""
     description: Optional[str] = ""
+    icon: Optional[str] = "Server"
+    seoTitle: Optional[str] = ""
+    seoDescription: Optional[str] = ""
+    showInMenu: bool = True
+    isActive: bool = True
     order: int = 0
 
 
@@ -1623,6 +1629,80 @@ async def get_product(product_id: str):
     clean(product)
     product["categoryName"] = category.get("name", "") if category else ""
     return product
+
+
+@api_router.get("/product-categories")
+async def list_product_categories():
+    categories = await db.product_categories.find({"isActive": {"$ne": False}}).sort("order", 1).to_list(100)
+    return [clean(c) for c in categories]
+
+
+@api_router.get("/categories/{slug}")
+async def get_category_by_slug(slug: str):
+    slug_norm = slug.strip().lower()
+    # Match by slug or case-insensitive name
+    category = await db.product_categories.find_one({
+        "$or": [
+            {"slug": slug_norm},
+            {"name": {"$regex": f"^{re.escape(slug_norm)}$", "$options": "i"}}
+        ]
+    })
+    
+    # If not found by exact slug/name, check common aliases
+    alias_map = {
+        "webhosting": "Webhosting",
+        "reseller": "Reseller Hosting",
+        "server": "Server & Infrastruktur",
+        "vps": "VPS Server",
+        "dedicated": "Dedicated Server",
+        "wordpress": "WordPress Hosting",
+        "email": "Business Mail Hosting",
+        "mail": "Business Mail Hosting",
+        "managed-services": "Managed Services"
+    }
+    if not category and slug_norm in alias_map:
+        category = await db.product_categories.find_one({
+            "$or": [
+                {"slug": slug_norm},
+                {"name": {"$regex": re.escape(alias_map[slug_norm]), "$options": "i"}}
+            ]
+        })
+
+    cat_id = category["id"] if category else None
+    cat_name = category["name"] if category else slug.title()
+
+    # Query products associated with this category or matching keywords
+    query = {"status": {"$ne": "inactive"}}
+    if cat_id:
+        query["$or"] = [
+            {"categoryId": cat_id},
+            {"menuSubcategory": slug_norm}
+        ]
+    else:
+        query["$or"] = [
+            {"name": {"$regex": re.escape(slug_norm), "$options": "i"}},
+            {"description": {"$regex": re.escape(slug_norm), "$options": "i"}},
+            {"menuSubcategory": slug_norm}
+        ]
+
+    products = await db.products.find(query).sort("order", 1).to_list(100)
+    for p in products:
+        clean(p)
+        p["categoryName"] = cat_name
+
+    return {
+        "category": clean(category) if category else {
+            "name": cat_name,
+            "slug": slug_norm,
+            "description": f"Professionelle {cat_name}-Lösungen mit Schweizer Präzision und maximaler Verfügbarkeit.",
+            "seoTitle": f"{cat_name} Schweiz | RedWORK Cloud",
+            "seoDescription": f"Entdecken Sie {cat_name} von RedWORK.ch – 100% NVMe SSD, Rechenzentrum Zürich und 24/7 Schweizer Support.",
+            "icon": "Server",
+            "showInMenu": True,
+            "isActive": True
+        },
+        "products": products
+    }
 
 
 # ----------------------------------------------------------------------------
