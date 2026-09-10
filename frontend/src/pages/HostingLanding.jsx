@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Server,
@@ -85,74 +85,49 @@ export default function HostingLanding() {
     fetchProducts();
   }, []);
 
-  // Helper to find existing product dynamically from DB
-  const findProduct = (nameKeywords) => {
-    return products.find(p => {
+  // Derive 3 core products dynamically from DB without hardcoded fallbacks
+  const coreProducts = useMemo(() => {
+    if (!Array.isArray(products) || products.length === 0) return [];
+
+    const activeHosting = products.filter(p => {
+      if (p.status === "inactive") return false;
       const pName = (p.name || "").toLowerCase();
-      return nameKeywords.some(k => pName.includes(k.toLowerCase()));
+      const pSub = (p.menuSubcategory || "").toLowerCase();
+      return pName.includes("webhosting") || pSub === "webhosting";
     });
-  };
 
-  // Filter 3 target products dynamically from DB
-  const pBasic = findProduct(["Webhosting Basic", "Linux Webhosting"]) || {
-    id: "basic",
-    name: "Linux Webhosting",
-    unitPrice: 9.90,
-    badge: "BELIEBT",
-    shortDescription: "Ultraschneller Schweizer NVMe-Speicherplatz",
-    features: [
-      "1 Website / Domain",
-      "10 GB NVMe SSD Speicher",
-      "Unbegrenzter Datentransfer",
-      "Kostenloses AutoSSL Zertifikat",
-      "E-Mail-Postfächer inklusive",
-      "cPanel Control Center"
-    ]
-  };
+    const findExact = (keyword) => activeHosting.find(p => (p.name || "").toLowerCase().includes(keyword.toLowerCase()));
 
-  const pPro = findProduct(["Webhosting Professional", "Business Webhosting"]) || {
-    id: "professional",
-    name: "Business Webhosting",
-    unitPrice: 19.90,
-    badge: "EMPFOHLEN",
-    recommended: true,
-    shortDescription: "High-Traffic Performance und automatische Backups",
-    features: [
-      "5 Websites / Domains",
-      "50 GB NVMe SSD High-Speed",
-      "Unbegrenzter Datentransfer",
-      "AutoSSL für alle Domains",
-      "Unbegrenzte E-Mail-Postfächer",
-      "Tägliche automatisierte Backups",
-      "cPanel & 1-Klick Installer (WordPress)"
-    ]
-  };
+    const basic = findExact("basic");
+    const pro = findExact("professional") || findExact("business");
+    const ent = findExact("enterprise");
 
-  const pEnterprise = findProduct(["Webhosting Enterprise", "Enterprise Webhosting"]) || {
-    id: "enterprise",
-    name: "Enterprise Webhosting",
-    unitPrice: 49.90,
-    badge: "PREMIUM",
-    shortDescription: "Maximale Ressourcen mit dediziertem CDN",
-    features: [
-      "Unbegrenzte Websites",
-      "200 GB NVMe SSD Enterprise",
-      "Unbegrenzter Datentransfer",
-      "Integrierte CDN-Beschleunigung",
-      "Tägliche Backups mit 1-Klick Restore",
-      "Höchste CPU & RAM Ressourcen",
-      "24/7 Notfall-Support"
-    ]
-  };
+    let selected = [];
+    if (basic && pro && ent) {
+      selected = [
+        { ...basic, displayName: basic.name, badge: basic.badge || "BELIEBT" },
+        { ...pro, displayName: pro.name, badge: pro.badge || "EMPFOHLEN", isHighlight: true },
+        { ...ent, displayName: ent.name, badge: ent.badge || "PREMIUM" }
+      ];
+    } else {
+      const sorted = [...activeHosting].sort((a, b) => (Number(a.unitPrice) || 0) - (Number(b.unitPrice) || 0));
+      selected = sorted.slice(0, 3).map((p, idx) => ({
+        ...p,
+        displayName: p.name,
+        badge: p.badge || (idx === 0 ? "BELIEBT" : idx === 1 ? "EMPFOHLEN" : "PREMIUM"),
+        isHighlight: idx === 1
+      }));
+    }
 
-  const coreProducts = [
-    { ...pBasic, displayName: "Linux Webhosting", badge: pBasic.badge || "BELIEBT" },
-    { ...pPro, displayName: "Business Webhosting", badge: pPro.badge || "EMPFOHLEN", isHighlight: true },
-    { ...pEnterprise, displayName: "Enterprise Webhosting", badge: pEnterprise.badge || "PREMIUM" }
-  ];
+    return selected;
+  }, [products]);
+
+  const pBasic = coreProducts[0] || null;
+  const pPro = coreProducts[1] || null;
+  const pEnterprise = coreProducts[2] || null;
 
   const handleOrder = (product) => {
-    if (!product?.id || product.id === "basic" || product.id === "professional" || product.id === "enterprise") {
+    if (!product || !product.id) {
       navigate("/hosting/webhosting");
       return;
     }
@@ -165,33 +140,70 @@ export default function HostingLanding() {
   };
 
   const handleDetails = (product) => {
-    if (!product?.id || product.id === "basic" || product.id === "professional" || product.id === "enterprise") {
+    if (!product || !product.id) {
       navigate("/hosting/webhosting");
       return;
     }
     navigate(`/products/${product.id}`);
   };
 
-  // Structured comparison table based on verified product fields
-  const comparisonRows = [
-    { label: "Speicherplatz (NVMe SSD)", basic: "10 GB NVMe", pro: "50 GB NVMe", ent: "200 GB NVMe" },
-    { label: "Websites / Domains", basic: "1 Website", pro: "5 Websites", ent: "Unbegrenzt" },
-    { label: "Datentransfer", basic: "Unbegrenzt", pro: "Unbegrenzt", ent: "Unbegrenzt" },
-    { label: "SSL-Zertifikate (AutoSSL)", basic: true, pro: true, ent: true },
-    { label: "Automatische Backups", basic: "Wöchentlich", pro: "Täglich", ent: "Täglich (1-Klick)" },
-    { label: "E-Mail-Postfächer", basic: "Bis zu 10", pro: "Unbegrenzt", ent: "Unbegrenzt" },
-    { label: "Datenbanken (MariaDB)", basic: "2 Datenbanken", pro: "10 Datenbanken", ent: "Unbegrenzt" },
-    { label: "cPanel Control Center", basic: true, pro: true, ent: true },
-    { label: "1-Klick Apps (WordPress)", basic: true, pro: true, ent: true },
-    { label: "Dediziertes CDN", basic: false, pro: false, ent: true },
-    { label: "Schweizer Standort (Zürich)", basic: true, pro: true, ent: true },
-    { label: "Support", basic: "Standard", pro: "Prioritär", ent: "24/7 Notfall" },
-  ];
+  // Structured comparison table based purely on real database fields
+  const comparisonRows = useMemo(() => {
+    if (coreProducts.length < 2) return [];
+
+    const parseTech = (p) => {
+      const map = {};
+      if (!p) return map;
+      const list = Array.isArray(p.technicalDetails) ? p.technicalDetails : [];
+      list.forEach(item => {
+        if (typeof item === "string" && item.includes(":")) {
+          const [k, ...v] = item.split(":");
+          map[k.trim().toLowerCase()] = v.join(":").trim();
+        }
+      });
+      return map;
+    };
+
+    const techBasic = parseTech(pBasic);
+    const techPro = parseTech(pPro);
+    const techEnt = parseTech(pEnterprise);
+
+    const featureKeys = [
+      { label: "Speicherplatz (NVMe SSD)", key: "speicherplatz" },
+      { label: "Websites / Domains", key: "websites / domains" },
+      { label: "Datentransfer", key: "datentransfer" },
+      { label: "SSL-Zertifikate (AutoSSL)", key: "ssl-zertifikate (autossl)" },
+      { label: "Automatische Backups", key: "automatische backups" },
+      { label: "E-Mail-Postfächer", key: "e-mail-postfächer" },
+      { label: "Datenbanken (MariaDB)", key: "datenbanken (mariadb)" },
+      { label: "cPanel Control Center", key: "cpanel control center" },
+      { label: "1-Klick Apps (WordPress)", key: "1-klick apps (wordpress)" },
+      { label: "Schweizer Infrastruktur", key: "schweizer infrastruktur" },
+      { label: "Technischer Support", key: "support" }
+    ];
+
+    return featureKeys.map(({ label, key }) => {
+      const getVal = (techMap) => {
+        const raw = techMap[key];
+        if (!raw) return "—";
+        if (raw.toLowerCase() === "inklusive" || raw.toLowerCase() === "true") return true;
+        if (raw.toLowerCase() === "nein" || raw.toLowerCase() === "false") return false;
+        return raw;
+      };
+
+      return {
+        label,
+        basic: getVal(techBasic),
+        pro: getVal(techPro),
+        ent: getVal(techEnt)
+      };
+    });
+  }, [coreProducts, pBasic, pPro, pEnterprise]);
 
   const faqs = [
     {
       q: "Welches Webhosting passt zu meiner Website?",
-      a: "Für einfache Websites, Blogs oder Firmen-Visitenkarten ist das 'Linux Webhosting' (CHF 9.90 / Mt.) ideal. Für geschäftliche Auftritte mit mehreren Domains, Onlineshops und höherem Besucheraufkommen empfehlen wir das 'Business Webhosting' (CHF 19.90 / Mt.). Für maximale Performance und komplexe Portale bietet das 'Enterprise Webhosting' (CHF 49.90 / Mt.) höchste CPU-, RAM- und CDN-Ressourcen."
+      a: "Für persönliche Websites, Blogs oder Firmen-Visitenkarten ist das Einstiegspaket optimal. Für geschäftliche Auftritte mit mehreren Domains, Onlineshops und höherem Besucheraufkommen empfehlen wir das mittlere Paket mit automatischen täglichen Sicherungen. Für maximale Ressourcen und höchste I/O-Performance steht das Enterprise-Paket bereit."
     },
     {
       q: "Kann ich später auf ein grösseres Paket wechseln?",
@@ -199,11 +211,11 @@ export default function HostingLanding() {
     },
     {
       q: "Wo befinden sich die Server?",
-      a: "Unsere gesamte Hosting-Infrastruktur wird in modernen, ISO-zertifizierten Rechenzentren in Zürich, Schweiz betrieben. Alle Daten verbleiben zu 100% in der Schweiz und unterliegen dem Schweizer Datenschutzgesetz (DSG)."
+      a: "Unsere gesamte Hosting-Infrastruktur wird auf moderner Schweizer Infrastruktur betrieben. Alle Daten verbleiben in der Schweiz und unterliegen dem Schweizer Datenschutzgesetz (DSG)."
     },
     {
       q: "Welche Backups sind enthalten?",
-      a: "Alle Webhosting-Tarife beinhalten automatisierte Backups Ihrer Webdaten, Datenbanken und E-Mails. Beim Business- und Enterprise-Tarif werden tägliche Backups angefertigt, die Sie bei Bedarf unkompliziert wiederherstellen können."
+      a: "Alle Webhosting-Tarife beinhalten automatisierte Backups Ihrer Webdaten, Datenbanken und E-Mails. Bei höheren Tarifen werden tägliche Backups angefertigt, die Sie bei Bedarf unkompliziert wiederherstellen können."
     },
     {
       q: "Kann ich eine eigene Domain verwenden?",
@@ -211,11 +223,11 @@ export default function HostingLanding() {
     },
     {
       q: "Kann ich mehrere Websites hosten?",
-      a: "Ja, ab dem Tarif 'Business Webhosting' können Sie bis zu 5 eigenständige Websites mit getrennten Verzeichnissen und Domains verwalten. Im 'Enterprise Webhosting' ist die Anzahl gehosteter Websites unbegrenzt."
+      a: "Ja, ab dem Professional-Paket können Sie mehrere eigenständige Websites mit getrennten Verzeichnissen und Domains verwalten. Im Enterprise-Paket ist die Anzahl gehosteter Websites unbegrenzt."
     },
     {
       q: "Wie funktioniert die Bestellung?",
-      a: "Wählen Sie Ihr gewünschtes Hosting-Paket aus, konfigurieren Sie Ihre Domain-Optionen und schliessen Sie die Bestellung online ab. Nach der Zahlungsbestätigung wird Ihr Hosting-Account vollautomatisch eingerichtet und Sie erhalten sofort Ihre cPanel-Zugangsdaten."
+      a: "Wählen Sie Ihr gewünschtes Hosting-Paket aus, konfigurieren Sie Ihre Domain-Optionen und schliessen Sie die Bestellung online ab. Nach der Zahlungsbestätigung wird Ihr Hosting-Account eingerichtet und Sie erhalten umgehend Ihre cPanel-Zugangsdaten."
     }
   ];
 
@@ -279,7 +291,7 @@ export default function HostingLanding() {
                       <span className="text-xs font-bold text-white uppercase tracking-wider">Systemstatus: Optimal</span>
                     </div>
                     <span className="text-[11px] font-mono text-[#D4AF37] bg-[#D4AF37]/10 px-2.5 py-0.5 rounded border border-[#D4AF37]/20">
-                      Standort Zürich (CH)
+                      Schweizer Infrastruktur
                     </span>
                   </div>
 
@@ -316,8 +328,8 @@ export default function HostingLanding() {
                         <Zap className="h-3.5 w-3.5 text-[#D4AF37]" />
                         <span>Verfügbarkeit</span>
                       </div>
-                      <p className="text-base font-bold text-white">99.9% Uptime</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">24/7 Monitoring</p>
+                      <p className="text-base font-bold text-white">Hohe Stabilität</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Proaktive Überwachung</p>
                     </div>
                   </div>
 
@@ -508,64 +520,78 @@ export default function HostingLanding() {
         {/* ================================================== */}
         {/* 4. HOSTING VERGLEICH                               */}
         {/* ================================================== */}
-        <section id="vergleich" className="py-20 lg:py-28 border-b border-white/10 bg-[#090C14]/50">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center max-w-2xl mx-auto mb-14">
-              <span className="text-xs font-black uppercase tracking-widest text-[#D4AF37]">Transparenz & Fakten</span>
-              <h2 className="text-3xl sm:text-4xl font-black text-white mt-2">
-                Welches Hosting passt zu Ihnen?
-              </h2>
-              <p className="text-sm text-slate-400 mt-2">
-                Detaillierter Funktions- und Ressourcenvergleich aller Webhosting-Tarife.
-              </p>
-            </div>
+        {coreProducts.length > 0 && comparisonRows.length > 0 && (
+          <section id="vergleich" className="py-20 lg:py-28 border-b border-white/10 bg-[#090C14]/50">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <div className="text-center max-w-2xl mx-auto mb-14">
+                <span className="text-xs font-black uppercase tracking-widest text-[#D4AF37]">Transparenz & Fakten</span>
+                <h2 className="text-3xl sm:text-4xl font-black text-white mt-2">
+                  Welches Hosting passt zu Ihnen?
+                </h2>
+                <p className="text-sm text-slate-400 mt-2">
+                  Detaillierter Funktions- und Ressourcenvergleich aller Webhosting-Tarife.
+                </p>
+              </div>
 
-            {/* Responsive Table Container */}
-            <div className="overflow-x-auto rounded-[32px] border border-white/10 bg-gradient-to-b from-[#0F1420] to-[#0A0D16] shadow-2xl">
-              <table className="w-full text-left border-collapse min-w-[640px]">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.02]">
-                    <th className="p-5 text-sm font-black text-white w-1/4">Leistungsmerkmal</th>
-                    <th className="p-5 text-sm font-black text-white w-1/4 text-center">
-                      <div>Linux Webhosting</div>
-                      <div className="text-xs text-[#FF7A00] font-normal mt-0.5">CHF {Number(pBasic.unitPrice || 9.90).toFixed(2)}/Mt.</div>
-                    </th>
-                    <th className="p-5 text-sm font-black text-[#D4AF37] w-1/4 text-center bg-[#D4AF37]/5">
-                      <div>Business Webhosting</div>
-                      <div className="text-xs text-white font-normal mt-0.5">CHF {Number(pPro.unitPrice || 19.90).toFixed(2)}/Mt.</div>
-                    </th>
-                    <th className="p-5 text-sm font-black text-white w-1/4 text-center">
-                      <div>Enterprise Webhosting</div>
-                      <div className="text-xs text-[#FF7A00] font-normal mt-0.5">CHF {Number(pEnterprise.unitPrice || 49.90).toFixed(2)}/Mt.</div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-xs sm:text-sm">
-                  {comparisonRows.map((row, rIdx) => (
-                    <tr key={rIdx} className="hover:bg-white/[0.02] transition">
-                      <td className="p-4 sm:p-5 font-semibold text-slate-300">{row.label}</td>
-                      <td className="p-4 sm:p-5 text-center text-slate-400">
-                        {typeof row.basic === "boolean" ? (
-                          row.basic ? <Check className="h-4 w-4 text-emerald-400 mx-auto" /> : <X className="h-4 w-4 text-slate-600 mx-auto" />
-                        ) : row.basic}
-                      </td>
-                      <td className="p-4 sm:p-5 text-center font-bold text-white bg-[#D4AF37]/5">
-                        {typeof row.pro === "boolean" ? (
-                          row.pro ? <Check className="h-4 w-4 text-[#D4AF37] mx-auto" /> : <X className="h-4 w-4 text-slate-600 mx-auto" />
-                        ) : row.pro}
-                      </td>
-                      <td className="p-4 sm:p-5 text-center text-slate-300 font-semibold">
-                        {typeof row.ent === "boolean" ? (
-                          row.ent ? <Check className="h-4 w-4 text-emerald-400 mx-auto" /> : <X className="h-4 w-4 text-slate-600 mx-auto" />
-                        ) : row.ent}
-                      </td>
+              {/* Responsive Table Container */}
+              <div className="overflow-x-auto rounded-[32px] border border-white/10 bg-gradient-to-b from-[#0F1420] to-[#0A0D16] shadow-2xl">
+                <table className="w-full text-left border-collapse min-w-[640px]">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-white/[0.02]">
+                      <th className="p-5 text-sm font-black text-white w-1/4">Leistungsmerkmal</th>
+                      {pBasic && (
+                        <th className="p-5 text-sm font-black text-white w-1/4 text-center">
+                          <div>{pBasic.displayName}</div>
+                          <div className="text-xs text-[#FF7A00] font-normal mt-0.5">CHF {Number(pBasic.unitPrice || 0).toFixed(2)}/Mt.</div>
+                        </th>
+                      )}
+                      {pPro && (
+                        <th className="p-5 text-sm font-black text-[#D4AF37] w-1/4 text-center bg-[#D4AF37]/5">
+                          <div>{pPro.displayName}</div>
+                          <div className="text-xs text-white font-normal mt-0.5">CHF {Number(pPro.unitPrice || 0).toFixed(2)}/Mt.</div>
+                        </th>
+                      )}
+                      {pEnterprise && (
+                        <th className="p-5 text-sm font-black text-white w-1/4 text-center">
+                          <div>{pEnterprise.displayName}</div>
+                          <div className="text-xs text-[#FF7A00] font-normal mt-0.5">CHF {Number(pEnterprise.unitPrice || 0).toFixed(2)}/Mt.</div>
+                        </th>
+                      )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-xs sm:text-sm">
+                    {comparisonRows.map((row, rIdx) => (
+                      <tr key={rIdx} className="hover:bg-white/[0.02] transition">
+                        <td className="p-4 sm:p-5 font-semibold text-slate-300">{row.label}</td>
+                        {pBasic && (
+                          <td className="p-4 sm:p-5 text-center text-slate-400">
+                            {typeof row.basic === "boolean" ? (
+                              row.basic ? <Check className="h-4 w-4 text-emerald-400 mx-auto" /> : <X className="h-4 w-4 text-slate-600 mx-auto" />
+                            ) : row.basic}
+                          </td>
+                        )}
+                        {pPro && (
+                          <td className="p-4 sm:p-5 text-center font-bold text-white bg-[#D4AF37]/5">
+                            {typeof row.pro === "boolean" ? (
+                              row.pro ? <Check className="h-4 w-4 text-[#D4AF37] mx-auto" /> : <X className="h-4 w-4 text-slate-600 mx-auto" />
+                            ) : row.pro}
+                          </td>
+                        )}
+                        {pEnterprise && (
+                          <td className="p-4 sm:p-5 text-center text-slate-300 font-semibold">
+                            {typeof row.ent === "boolean" ? (
+                              row.ent ? <Check className="h-4 w-4 text-emerald-400 mx-auto" /> : <X className="h-4 w-4 text-slate-600 mx-auto" />
+                            ) : row.ent}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
 
         {/* ================================================== */}
@@ -767,7 +793,7 @@ export default function HostingLanding() {
                   <div className="flex justify-center text-slate-500 font-bold">↓</div>
                   <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.04] border border-[#D4AF37]/30 text-[#D4AF37]">
                     <Cloud className="h-4 w-4" />
-                    <span>RedWORK Cloud (Zürich, CH)</span>
+                    <span>RedWORK Schweizer Infrastruktur</span>
                   </div>
                   <div className="flex justify-center text-slate-500 font-bold">↓</div>
                   <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/10">
