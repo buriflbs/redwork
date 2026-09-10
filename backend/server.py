@@ -1724,7 +1724,7 @@ async def get_category_by_slug(slug: str):
 # ----------------------------------------------------------------------------
 @api_router.post("/orders", response_model=Order)
 async def create_order(payload: OrderIn, user=Depends(require_customer)):
-    product = await db.products.find_one({"id": payload.productId, "status": "active"})
+    product = await db.products.find_one({"id": payload.productId, "status": {"$ne": "inactive"}})
     if not product:
         raise HTTPException(404, "Produkt nicht verfügbar")
     if payload.duration not in (product.get("billingCycles") or ["monthly", "yearly"]):

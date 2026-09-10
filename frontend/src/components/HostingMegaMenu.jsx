@@ -87,7 +87,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Terminal,
           badge: "BELIEBT",
           badgeColor: "bg-[#FF7A00]/15 text-[#FF7A00] border-[#FF7A00]/30",
-          to: pWebBasic ? `/products/${pWebBasic.id}` : "/hosting/webhosting",
+          to: "/hosting/webhosting/basic",
           price: pWebBasic ? `CHF ${Number(pWebBasic.unitPrice).toFixed(2)}/Mt.` : "CHF 9.90/Mt."
         },
         {
@@ -96,7 +96,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Layers,
           badge: "EMPFOHLEN",
           badgeColor: "bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/30",
-          to: pWebPro ? `/products/${pWebPro.id}` : "/hosting/webhosting",
+          to: "/hosting/webhosting/professional",
           price: pWebPro ? `CHF ${Number(pWebPro.unitPrice).toFixed(2)}/Mt.` : "CHF 19.90/Mt."
         },
         {
@@ -105,7 +105,7 @@ export default function HostingMegaMenu({ onClose, isMobile = false }) {
           icon: Zap,
           badge: "PREMIUM",
           badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-          to: pWebEnt ? `/products/${pWebEnt.id}` : "/hosting/webhosting",
+          to: "/hosting/webhosting/enterprise",
           price: pWebEnt ? `CHF ${Number(pWebEnt.unitPrice).toFixed(2)}/Mt.` : "CHF 49.90/Mt."
         }
       ]

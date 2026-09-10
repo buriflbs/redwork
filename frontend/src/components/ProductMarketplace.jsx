@@ -165,7 +165,7 @@ export default function ProductMarketplace({ embedded = false }) {
                 <div className="flex justify-between"><span>Zwischensumme</span><strong>CHF {priceFor(selectedProduct, cycle).toFixed(2)}</strong></div>
                 <div className="mt-2 flex justify-between"><span>MWST</span><strong>wird im Backend berechnet</strong></div>
               </div>
-              <Button onClick={() => orderProduct(selectedProduct)} disabled={ordering === selectedProduct.id || selectedProduct.status !== "active"} className="mt-5 w-full">
+              <Button onClick={() => orderProduct(selectedProduct)} disabled={ordering === selectedProduct.id || selectedProduct.status === "inactive"} className="mt-5 w-full">
                 <CreditCard className="mr-2 h-4 w-4" /> Zahlungspflichtig bestellen
               </Button>
             </div>
@@ -223,7 +223,7 @@ export default function ProductMarketplace({ embedded = false }) {
                 </div>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
                   <Link to={embedded ? `/dashboard/products/${product.id}` : `/products/${product.id}`}><Button variant="outline" className="w-full">Details</Button></Link>
-                  <Button onClick={() => handleSelectProduct(product)} disabled={ordering === product.id || product.status !== "active"} className="w-full bg-[#E63946] hover:bg-[#d02f3c] text-white"><ShoppingCart className="mr-2 h-4 w-4" /> Auswählen</Button>
+                  <Button onClick={() => handleSelectProduct(product)} disabled={ordering === product.id || product.status === "inactive"} className="w-full bg-[#E63946] hover:bg-[#d02f3c] text-white"><ShoppingCart className="mr-2 h-4 w-4" /> Auswählen</Button>
                 </div>
               </article>
             );
