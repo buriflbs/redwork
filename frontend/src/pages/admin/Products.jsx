@@ -198,6 +198,27 @@ export default function Products() {
               {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
+          <div className="grid grid-cols-2 gap-3 mb-2">
+            <Field label="Menü-Unterkategorie">
+              <select value={editingProd.menuSubcategory || "webhosting"} onChange={(e) => setEditingProd({ ...editingProd, menuSubcategory: e.target.value })} className={inp}>
+                <option value="webhosting">Webhosting</option>
+                <option value="reseller">Reseller & Business</option>
+                <option value="server">Server & Infrastruktur</option>
+                <option value="special">Spezial-Lösungen</option>
+              </select>
+            </Field>
+            <div className="flex items-center pt-6">
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editingProd.showInMenu !== false}
+                  onChange={(e) => setEditingProd({ ...editingProd, showInMenu: e.target.checked })}
+                  className="rounded text-[#FF7A00]"
+                />
+                <span>Im Hosting Mega-Menü</span>
+              </label>
+            </div>
+          </div>
           <Field label="Billing Cycles">
             <div className="flex flex-wrap gap-2">
               {["monthly", "yearly", "two_years"].map((cycle) => (

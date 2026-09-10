@@ -179,6 +179,28 @@ export default function HostingPackagesAdmin() {
               {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
+          <div className="grid grid-cols-2 gap-3 mb-2">
+            <Field label="Badge (z.B. BELIEBT, EMPFOHLEN)">
+              <input value={editingProd.badge || ""} onChange={(e) => setEditingProd({ ...editingProd, badge: e.target.value })} placeholder="BELIEBT" className={inp} />
+            </Field>
+            <Field label="Menü-Unterkategorie">
+              <select value={editingProd.menuSubcategory || "webhosting"} onChange={(e) => setEditingProd({ ...editingProd, menuSubcategory: e.target.value })} className={inp}>
+                <option value="webhosting">Webhosting</option>
+                <option value="reseller">Reseller & Business</option>
+                <option value="server">Server & Infrastruktur</option>
+                <option value="special">Spezial-Lösungen</option>
+              </select>
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={editingProd.showInMenu !== false}
+              onChange={(e) => setEditingProd({ ...editingProd, showInMenu: e.target.checked })}
+              className="rounded text-[#FF7A00]"
+            />
+            <span>Im Hosting Mega-Menü anzeigen</span>
+          </label>
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
             <button onClick={() => setEditingProd(null)} className="px-4 py-2.5 rounded-lg bg-slate-100 text-[#0f172a] font-bold text-sm">Abbrechen</button>
             <button onClick={saveProd} disabled={!editingProd.name} data-testid="save-product-btn" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#E63946] hover:bg-[#c5303d] disabled:opacity-50 text-white font-bold text-sm"><Save size={15} /> Speichern</button>

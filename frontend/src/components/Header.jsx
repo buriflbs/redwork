@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { Menu, X, ChevronDown, LogIn, Phone, Mail, LayoutDashboard } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
+import { Menu, X, ChevronDown, LogIn, Phone, Mail, LayoutDashboard, Server } from "lucide-react";
 import { useModals } from "../contexts/ModalContext";
 import { useAuth } from "../contexts/AuthContext";
 import api from "../api";
 import Logo from "./Logo";
+import HostingMegaMenu from "./HostingMegaMenu";
 
 const mainLinks = [
   { label: "Start", href: "#top" },
@@ -24,9 +26,12 @@ const serviceLinks = [
 export default function Header({ scrolled }) {
   const [open, setOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
+  const [hostingOpen, setHostingOpen] = useState(false);
+  const [mobileHostingOpen, setMobileHostingOpen] = useState(false);
   const [phone, setPhone] = useState("+41 76 298 10 15");
   const { openQuote, openContact } = useModals();
   const { user, logout, isAdmin } = useAuth();
+  const hostingTimeoutRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -40,6 +45,30 @@ export default function Header({ scrolled }) {
       .catch(() => {});
     return () => { mounted = false; };
   }, []);
+
+  // Keyboard accessibility: ESC closes mega-menu
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setHostingOpen(false);
+        setServicesOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleHostingMouseEnter = () => {
+    if (hostingTimeoutRef.current) clearTimeout(hostingTimeoutRef.current);
+    setHostingOpen(true);
+    setServicesOpen(false);
+  };
+
+  const handleHostingMouseLeave = () => {
+    hostingTimeoutRef.current = setTimeout(() => {
+      setHostingOpen(false);
+    }, 200);
+  };
 
   const handleNav = (e, href) => {
     if (!href?.startsWith("#")) return;
@@ -57,6 +86,7 @@ export default function Header({ scrolled }) {
     }
     setOpen(false);
     setServicesOpen(false);
+    setHostingOpen(false);
   };
 
   const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
@@ -76,8 +106,46 @@ export default function Header({ scrolled }) {
             </a>
           ))}
 
+          {/* Mega-Menü Item: Hosting */}
+          <div
+            className="relative"
+            onMouseEnter={handleHostingMouseEnter}
+            onMouseLeave={handleHostingMouseLeave}
+          >
+            <button
+              type="button"
+              onClick={() => setHostingOpen((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition ${
+                hostingOpen
+                  ? "bg-white/15 text-[#D4AF37] shadow-sm"
+                  : "text-white/90 hover:bg-white/10 hover:text-[#D4AF37]"
+              }`}
+              aria-expanded={hostingOpen}
+              aria-haspopup="menu"
+            >
+              <Server size={14} className={hostingOpen ? "text-[#D4AF37]" : "text-slate-400"} />
+              <span>Hosting</span>
+              <span className="ml-1 rounded bg-[#D4AF37]/20 px-1.5 py-0.2 text-[10px] font-black text-[#D4AF37] uppercase tracking-wider">
+                Cloud
+              </span>
+              <ChevronDown size={14} className={`transition duration-200 ${hostingOpen ? "rotate-180 text-[#D4AF37]" : ""}`} />
+            </button>
+
+            {/* Desktop Mega Menu Floating Dropdown */}
+            {hostingOpen && (
+              <div
+                className="fixed left-1/2 -translate-x-1/2 top-[72px] w-[96vw] max-w-[1360px] z-50 pt-2"
+                onMouseEnter={handleHostingMouseEnter}
+                onMouseLeave={handleHostingMouseLeave}
+              >
+                <HostingMegaMenu onClose={() => setHostingOpen(false)} isMobile={false} />
+              </div>
+            )}
+          </div>
+
+          {/* Standard Dropdown: Leistungen */}
           <div className="relative">
-            <button type="button" onClick={() => setServicesOpen((v) => !v)} className="flex items-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/10 hover:text-[#FFC107]">
+            <button type="button" onClick={() => { setServicesOpen((v) => !v); setHostingOpen(false); }} className="flex items-center gap-1 rounded-full px-3.5 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/10 hover:text-[#FFC107]">
               Leistungen <ChevronDown size={15} className={`transition ${servicesOpen ? "rotate-180" : ""}`} />
             </button>
             {servicesOpen && (
@@ -121,7 +189,6 @@ export default function Header({ scrolled }) {
               <span>Angebot</span>
               <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>
             </span>
-            {/* Shimmer light streak passing across button */}
             <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full pointer-events-none" />
           </button>
         </div>
@@ -131,18 +198,45 @@ export default function Header({ scrolled }) {
         </button>
       </div>
 
+      {/* Mobile Menu */}
       {open && (
-        <div className="xl:hidden border-t border-white/10 bg-[#07090f]/98 px-4 py-5 shadow-2xl">
+        <div className="xl:hidden border-t border-white/10 bg-[#07090f]/98 px-4 py-5 shadow-2xl max-h-[85vh] overflow-y-auto">
           <div className="grid gap-2">
             <a href={cleanTel} className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-base font-bold text-white mb-2">
               <Phone size={18} className="text-[#FFC107]" /> <span>{phone}</span>
             </a>
-            {mainLinks.map((item) => (
+            {mainLinks.slice(0, 1).map((item) => (
               <a key={item.label} href={item.href} onClick={(e) => handleNav(e, item.href)} className="rounded-2xl px-4 py-3 text-base font-bold text-white hover:bg-white/10 hover:text-[#FFC107]">
                 {item.label}
               </a>
             ))}
-            <div className="mt-2 rounded-3xl border border-white/10 bg-white/[0.04] p-3">
+
+            {/* Mobile Accordion: Hosting */}
+            <div className="rounded-3xl border border-[#D4AF37]/30 bg-gradient-to-b from-[#D4AF37]/5 to-transparent p-3">
+              <button
+                type="button"
+                onClick={() => setMobileHostingOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-2 py-1 text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Server size={16} className="text-[#D4AF37]" />
+                  <span className="text-sm font-black text-white">Hosting & Cloud</span>
+                  <span className="rounded bg-[#D4AF37]/20 px-1.5 py-0.5 text-[9px] font-black text-[#D4AF37] uppercase tracking-wider">
+                    NVMe
+                  </span>
+                </div>
+                <ChevronDown size={16} className={`text-slate-400 transition-transform ${mobileHostingOpen ? "rotate-180 text-[#D4AF37]" : ""}`} />
+              </button>
+
+              {mobileHostingOpen && (
+                <div className="mt-3 pt-2 border-t border-white/10">
+                  <HostingMegaMenu onClose={() => setOpen(false)} isMobile={true} />
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Accordion: Leistungen */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-3">
               <p className="px-2 pb-2 text-xs font-black uppercase tracking-[0.22em] text-white/45">Leistungen</p>
               {serviceLinks.map((service) => (
                 <a key={service.label} href={service.href} onClick={(e) => handleNav(e, service.href)} className="block rounded-2xl px-4 py-2.5 text-sm font-semibold text-white/85 hover:bg-white/10">
@@ -150,6 +244,13 @@ export default function Header({ scrolled }) {
                 </a>
               ))}
             </div>
+
+            {mainLinks.slice(1).map((item) => (
+              <a key={item.label} href={item.href} onClick={(e) => handleNav(e, item.href)} className="rounded-2xl px-4 py-3 text-base font-bold text-white hover:bg-white/10 hover:text-[#FFC107]">
+                {item.label}
+              </a>
+            ))}
+
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <button onClick={() => { openContact(); setOpen(false); }} className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-left font-bold text-white">Kontakt</button>
               {user ? (

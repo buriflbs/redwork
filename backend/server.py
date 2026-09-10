@@ -590,6 +590,9 @@ class ProductIn(BaseModel):
     image: Optional[str] = ""
     availability: Optional[str] = "available"
     order: int = 0
+    showInMenu: bool = True
+    menuSubcategory: Optional[str] = ""  # webhosting | reseller | server | special
+    iconName: Optional[str] = ""
 
 
 class Product(ProductIn):
