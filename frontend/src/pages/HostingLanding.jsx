@@ -147,58 +147,59 @@ export default function HostingLanding() {
     navigate(`/products/${product.id}`);
   };
 
-  // Structured comparison table based purely on real database fields
+  // Dynamic comparison table completely derived from actual database attributes
   const comparisonRows = useMemo(() => {
-    if (coreProducts.length < 2) return [];
+    if (!coreProducts || coreProducts.length < 2) return [];
 
-    const parseTech = (p) => {
+    // Parse technicalDetails for each product into map: lowerKey -> { originalLabel, value }
+    const productMaps = coreProducts.map(p => {
       const map = {};
-      if (!p) return map;
       const list = Array.isArray(p.technicalDetails) ? p.technicalDetails : [];
       list.forEach(item => {
         if (typeof item === "string" && item.includes(":")) {
           const [k, ...v] = item.split(":");
-          map[k.trim().toLowerCase()] = v.join(":").trim();
+          const cleanK = k.trim();
+          const cleanV = v.join(":").trim();
+          map[cleanK.toLowerCase()] = { label: cleanK, val: cleanV };
         }
       });
       return map;
-    };
-
-    const techBasic = parseTech(pBasic);
-    const techPro = parseTech(pPro);
-    const techEnt = parseTech(pEnterprise);
-
-    const featureKeys = [
-      { label: "Speicherplatz (NVMe SSD)", key: "speicherplatz" },
-      { label: "Websites / Domains", key: "websites / domains" },
-      { label: "Datentransfer", key: "datentransfer" },
-      { label: "SSL-Zertifikate (AutoSSL)", key: "ssl-zertifikate (autossl)" },
-      { label: "Automatische Backups", key: "automatische backups" },
-      { label: "E-Mail-Postfächer", key: "e-mail-postfächer" },
-      { label: "Datenbanken (MariaDB)", key: "datenbanken (mariadb)" },
-      { label: "cPanel Control Center", key: "cpanel control center" },
-      { label: "1-Klick Apps (WordPress)", key: "1-klick apps (wordpress)" },
-      { label: "Schweizer Infrastruktur", key: "schweizer infrastruktur" },
-      { label: "Technischer Support", key: "support" }
-    ];
-
-    return featureKeys.map(({ label, key }) => {
-      const getVal = (techMap) => {
-        const raw = techMap[key];
-        if (!raw) return "—";
-        if (raw.toLowerCase() === "inklusive" || raw.toLowerCase() === "true") return true;
-        if (raw.toLowerCase() === "nein" || raw.toLowerCase() === "false") return false;
-        return raw;
-      };
-
-      return {
-        label,
-        basic: getVal(techBasic),
-        pro: getVal(techPro),
-        ent: getVal(techEnt)
-      };
     });
-  }, [coreProducts, pBasic, pPro, pEnterprise]);
+
+    // Collect all unique feature keys preserving insertion order across all products
+    const keyMap = new Map();
+    productMaps.forEach(m => {
+      Object.keys(m).forEach(k => {
+        if (!keyMap.has(k)) {
+          keyMap.set(k, m[k].label);
+        }
+      });
+    });
+
+    const rows = [];
+    keyMap.forEach((label, key) => {
+      const row = { label, values: [] };
+      productMaps.forEach(m => {
+        const item = m[key];
+        if (!item || !item.val) {
+          row.values.push("—");
+        } else {
+          const v = item.val;
+          const vLower = v.toLowerCase();
+          if (vLower === "inklusive" || vLower === "true" || vLower === "ja") {
+            row.values.push(true);
+          } else if (vLower === "nein" || vLower === "false" || vLower === "nicht enthalten") {
+            row.values.push(false);
+          } else {
+            row.values.push(v);
+          }
+        }
+      });
+      rows.push(row);
+    });
+
+    return rows;
+  }, [coreProducts]);
 
   const faqs = [
     {
@@ -398,11 +399,29 @@ export default function HostingLanding() {
               </p>
             </div>
 
-            {/* Error / Loading States */}
+            {/* Premium Loading Skeleton */}
             {loading && (
-              <div className="py-16 text-center">
-                <RefreshCw className="h-8 w-8 text-[#D4AF37] animate-spin mx-auto mb-3" />
-                <p className="text-sm text-slate-400 font-semibold">Produkte werden geladen...</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch animate-pulse">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="rounded-[32px] p-8 bg-white/[0.02] border border-white/5 flex flex-col justify-between min-h-[560px]"
+                  >
+                    <div>
+                      <div className="h-6 w-3/4 bg-white/10 rounded-lg mb-4" />
+                      <div className="h-4 w-full bg-white/5 rounded mb-2" />
+                      <div className="h-4 w-2/3 bg-white/5 rounded mb-8" />
+                      <div className="h-20 bg-white/[0.03] rounded-2xl mb-8" />
+                      <div className="space-y-3">
+                        <div className="h-4 w-5/6 bg-white/5 rounded" />
+                        <div className="h-4 w-4/6 bg-white/5 rounded" />
+                        <div className="h-4 w-3/4 bg-white/5 rounded" />
+                        <div className="h-4 w-2/3 bg-white/5 rounded" />
+                      </div>
+                    </div>
+                    <div className="h-12 bg-white/10 rounded-2xl mt-8" />
+                  </div>
+                ))}
               </div>
             )}
 
@@ -539,51 +558,50 @@ export default function HostingLanding() {
                   <thead>
                     <tr className="border-b border-white/10 bg-white/[0.02]">
                       <th className="p-5 text-sm font-black text-white w-1/4">Leistungsmerkmal</th>
-                      {pBasic && (
-                        <th className="p-5 text-sm font-black text-white w-1/4 text-center">
-                          <div>{pBasic.displayName}</div>
-                          <div className="text-xs text-[#FF7A00] font-normal mt-0.5">CHF {Number(pBasic.unitPrice || 0).toFixed(2)}/Mt.</div>
-                        </th>
-                      )}
-                      {pPro && (
-                        <th className="p-5 text-sm font-black text-[#D4AF37] w-1/4 text-center bg-[#D4AF37]/5">
-                          <div>{pPro.displayName}</div>
-                          <div className="text-xs text-white font-normal mt-0.5">CHF {Number(pPro.unitPrice || 0).toFixed(2)}/Mt.</div>
-                        </th>
-                      )}
-                      {pEnterprise && (
-                        <th className="p-5 text-sm font-black text-white w-1/4 text-center">
-                          <div>{pEnterprise.displayName}</div>
-                          <div className="text-xs text-[#FF7A00] font-normal mt-0.5">CHF {Number(pEnterprise.unitPrice || 0).toFixed(2)}/Mt.</div>
-                        </th>
-                      )}
+                      {coreProducts.map((p, pIdx) => {
+                        const isHigh = p.isHighlight;
+                        return (
+                          <th
+                            key={p.id || pIdx}
+                            className={`p-5 text-sm font-black text-center ${
+                              isHigh ? "text-[#D4AF37] bg-[#D4AF37]/5" : "text-white"
+                            }`}
+                            style={{ width: `${75 / coreProducts.length}%` }}
+                          >
+                            <div>{p.displayName}</div>
+                            <div className={`text-xs font-normal mt-0.5 ${isHigh ? "text-white" : "text-[#FF7A00]"}`}>
+                              CHF {Number(p.unitPrice || 0).toFixed(2)}/Mt.
+                            </div>
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs sm:text-sm">
                     {comparisonRows.map((row, rIdx) => (
                       <tr key={rIdx} className="hover:bg-white/[0.02] transition">
                         <td className="p-4 sm:p-5 font-semibold text-slate-300">{row.label}</td>
-                        {pBasic && (
-                          <td className="p-4 sm:p-5 text-center text-slate-400">
-                            {typeof row.basic === "boolean" ? (
-                              row.basic ? <Check className="h-4 w-4 text-emerald-400 mx-auto" /> : <X className="h-4 w-4 text-slate-600 mx-auto" />
-                            ) : row.basic}
-                          </td>
-                        )}
-                        {pPro && (
-                          <td className="p-4 sm:p-5 text-center font-bold text-white bg-[#D4AF37]/5">
-                            {typeof row.pro === "boolean" ? (
-                              row.pro ? <Check className="h-4 w-4 text-[#D4AF37] mx-auto" /> : <X className="h-4 w-4 text-slate-600 mx-auto" />
-                            ) : row.pro}
-                          </td>
-                        )}
-                        {pEnterprise && (
-                          <td className="p-4 sm:p-5 text-center text-slate-300 font-semibold">
-                            {typeof row.ent === "boolean" ? (
-                              row.ent ? <Check className="h-4 w-4 text-emerald-400 mx-auto" /> : <X className="h-4 w-4 text-slate-600 mx-auto" />
-                            ) : row.ent}
-                          </td>
-                        )}
+                        {row.values.map((val, vIdx) => {
+                          const isHigh = coreProducts[vIdx]?.isHighlight;
+                          return (
+                            <td
+                              key={vIdx}
+                              className={`p-4 sm:p-5 text-center ${
+                                isHigh ? "font-bold text-white bg-[#D4AF37]/5" : "text-slate-300"
+                              }`}
+                            >
+                              {typeof val === "boolean" ? (
+                                val ? (
+                                  <Check className={`h-4 w-4 mx-auto ${isHigh ? "text-[#D4AF37]" : "text-emerald-400"}`} />
+                                ) : (
+                                  <X className="h-4 w-4 text-slate-600 mx-auto" />
+                                )
+                              ) : (
+                                <span>{val}</span>
+                              )}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>
@@ -968,14 +986,22 @@ export default function HostingLanding() {
                 >
                   <button
                     type="button"
+                    aria-expanded={activeFaq === idx}
+                    aria-controls={`faq-answer-${idx}`}
+                    id={`faq-button-${idx}`}
                     onClick={() => setActiveFaq(activeFaq === idx ? null : idx)}
-                    className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-sm text-white hover:bg-white/[0.04]"
+                    className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-sm text-white hover:bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
                   >
                     <span>{faq.q}</span>
                     <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${activeFaq === idx ? "rotate-180 text-[#D4AF37]" : ""}`} />
                   </button>
                   {activeFaq === idx && (
-                    <div className="px-5 pb-5 pt-1 text-xs sm:text-sm text-slate-300 leading-relaxed border-t border-white/5">
+                    <div
+                      id={`faq-answer-${idx}`}
+                      role="region"
+                      aria-labelledby={`faq-button-${idx}`}
+                      className="px-5 pb-5 pt-1 text-xs sm:text-sm text-slate-300 leading-relaxed border-t border-white/5"
+                    >
                       {faq.a}
                     </div>
                   )}
